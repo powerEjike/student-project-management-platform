@@ -40,3 +40,9 @@ No production account or deployment credentials belong in this repository. Do no
 - Desktop and 390px mobile sign-in layouts inspected; blank-email reset validation verified.
 - Hosting deployment verified at https://student-project-manageme-7efae.web.app.
 - Initial administrator Auth account and active approval record created without setting a password. A real sign-in must be checked after the owner sets their password.
+
+## Web configuration safeguards
+
+The example configuration uses an API key placeholder. Real build configuration belongs in ignored `.env.local`; never copy it back into `.env.example`. A test rejects Google API keys in the example file.
+
+Firebase browser configuration is visible in the built web app. Its API key identifies the project; approved staff records and Firestore rules enforce data access. Keep the browser key restricted to Identity Toolkit, Secure Token and Firestore, and to the two Firebase Hosting domains and local development on port 5173. Review these restrictions deliberately when adding another service or domain.
