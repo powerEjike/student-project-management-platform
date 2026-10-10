@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.example
+.firebase/
+*-debug.log
+dist/
+*.tsbuildinfo

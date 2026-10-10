@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function staffPath() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function activeStaff() {
+      return signedIn() && exists(staffPath()) && get(staffPath()).data.active == true
+        && get(staffPath()).data.role in ['admin', 'hod', 'lecturer'];
+    }
+    function role() { return get(staffPath()).data.role; }
+    function sameDepartment(departmentId) {
+      return activeStaff() && get(staffPath()).data.departmentId == departmentId;
+    }
+    function projectAccess(project) {
+      return activeStaff() && role() != 'admin' && sameDepartment(project.departmentId)
+        && (role() == 'hod' || project.supervisorId == request.auth.uid
+          || project.get('coSupervisorId', '') == request.auth.uid);
+    }
+    match /staff/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if activeStaff() && role() == 'admin';
+      // All access changes use trusted server tooling, never the browser.
+      allow write: if false;
+    }
+    match /departments/{departmentId} {
+      allow read: if activeStaff() && (role() == 'admin' || sameDepartment(departmentId));
+      allow write: if false;
+    }
+    match /projects/{projectId} {
+      allow read: if projectAccess(resource.data);
+      allow write: if false;
+      match /{nested=**} {
+        allow read: if projectAccess(get(/databases/$(database)/documents/projects/$(projectId)).data);
+        allow write: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
