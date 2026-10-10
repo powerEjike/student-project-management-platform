@@ -30,3 +30,13 @@ Co-supervisor is a project allocation, not a fourth account role. All database w
 5. `npm run build`, then `npx firebase deploy --only hosting`.
 
 No production account or deployment credentials belong in this repository. Do not grant roles by editing client-side configuration. Project registration, staff-management screens, uploads and progress dashboards are later tasks.
+
+## Verified first delivery
+
+- Production build and four local access-policy tests passed.
+- GitHub Actions ran the build, access tests and four actual Firestore emulator tests successfully: https://github.com/powerEjike/student-project-management-platform/actions/runs/38086104953.
+- Firestore rule compilation and deployment succeeded.
+- Default Standard database location verified as `europe-west2` (London).
+- Desktop and 390px mobile sign-in layouts inspected; blank-email reset validation verified.
+- Hosting deployment verified at https://student-project-manageme-7efae.web.app.
+- Initial administrator Auth account and active approval record created without setting a password. A real sign-in must be checked after the owner sets their password.

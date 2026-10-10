@@ -28,7 +28,9 @@ A departmental platform for assigning supervisors, tracking student projects, pr
 
 ## Infrastructure
 
-Firebase project: `student-project-manageme-7efae`. Web app configuration is recorded in `.env.example` and the local Firebase project alias is in `.firebaserc`. Authentication, database, storage rules and hosting are not yet configured or deployed. These configuration files do not grant deployment access.
+Firebase project: `student-project-manageme-7efae`. Web app configuration is recorded in `.env.example` and the local Firebase project alias is in `.firebaserc`. These configuration files do not grant deployment access.
+
+The staff sign-in foundation is live at https://student-project-manageme-7efae.web.app. Email/password Authentication is enabled. The default Standard Firestore database is in London (`europe-west2`) and the tested Firestore rules are deployed. Storage access remains outside this task; its deny-all rules are prepared locally. The initial administrator has been provisioned and must set their own password through Forgot password.
 
 Before implementation, confirm tenancy, permissions, project states and the Firebase document storage and processing approach. Document conversion and annotation need an early feasibility check.
 
