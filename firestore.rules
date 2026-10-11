@@ -8,7 +8,7 @@ service cloud.firestore {
   function same(id) { return active() && get(self()).data.departmentId == id; }
   function hod(id) { return same(id) && role() == 'hod'; }
   function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.matches('.*[^ ].*'); }
-  function titleKey(value) { return value.lower().replace('[^\\p{L}\\p{N}\\s]','').replace('\\s+',' ').trim(); }
+  function titleKey(value) { return value.replace('[^\\p{L}\\p{N}\\s]','').replace('\\s+',' ').trim(); }
   function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
   function studentPath(id) { return /databases/$(database)/documents/students/$(id); }
   function staffPath(id) { return /databases/$(database)/documents/staff/$(id); }
@@ -95,7 +95,7 @@ service cloud.firestore {
    allow list: if active() && role() != 'admin' && same(resource.data.departmentId);
    allow create: if hod(request.resource.data.departmentId) && id.matches('[a-f0-9]{64}')
     && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','supervisor','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId'])
-    && text(request.resource.data.title,300) && request.resource.data.titleKey == titleKey(request.resource.data.title) && text(request.resource.data.titleKey,300)
+    && text(request.resource.data.title,300) && request.resource.data.titleKey.matches('[\\p{L}\\p{N} ]+') && !request.resource.data.titleKey.matches('.*\\p{Lu}.*') && titleKey(request.resource.data.title).matches('(?i)' + request.resource.data.titleKey) && text(request.resource.data.titleKey,300)
     && text(request.resource.data.author,120) && text(request.resource.data.supervisor,120) && text(request.resource.data.programme,80)
     && request.resource.data.year is int && request.resource.data.year >= 1900 && request.resource.data.year <= 2100 && request.resource.data.active == true
     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
