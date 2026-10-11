@@ -7,7 +7,7 @@ test('progress report exports only supplied students and preserves sessions, unk
 test('progress report distinguishes completed, withheld, pending release and cleared projects without exporting private notes',()=>{
  const projects=['completed','withheld','pending','cleared'].map(id=>({studentId:id,status:'Active',supervisorName:'Supervisor',coSupervisorName:'Co',title:'Topic',note:'Private note',milestones:{a:{status:'Completed',dueDate:'2020-01-01'},b:{status:'In progress',dueDate:'2020-01-01'}},...({completed:{completedDate:'2026-10-10'},withheld:{releaseState:'Withheld'},pending:{releaseState:'Pending'},cleared:{defenceCleared:true,defenceDate:{toDate:()=>new Date('2026-10-10T23:30:00Z')}}}[id])}));
  const rows=progressRows(projects.map(p=>student(p.studentId)),projects,'2026-10-11');
- assert.deepEqual(rows.map(r=>r[9]),['Defence finished & archived','Withheld','Release requested','Completed — ready for defence']);assert.equal(rows[0][13],0);assert.equal(rows[2][13],1);assert.equal(rows[3][15],'2026-10-11');assert.equal(rows[0][16],'2026-10-10');assert.ok(!JSON.stringify(rows).includes('Private note'));
+ assert.deepEqual(rows.map(r=>r[9]),['Defence finished & archived','Withheld','Release requested','Completed — ready for defence']);assert.deepEqual(rows.map(r=>r[13]),[0,0,1,0]);assert.equal(rows[3][15],'2026-10-11');assert.equal(rows[0][16],'2026-10-10');assert.ok(!JSON.stringify(rows).includes('Private note'));
 });
 import {progressWorkbook} from '../src/progressExport.ts';import ExcelJS from 'exceljs';
 test('Excel report preserves registration text and formula-like names as literal values with usable table filters',async()=>{
