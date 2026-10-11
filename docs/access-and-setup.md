@@ -66,3 +66,9 @@ Validation: nine local checks and sixteen Firestore permission tests passed in G
 
 Imported 200 historical Biochemistry projects (2015–2025) from the owner's CSV. Every archive record and corresponding audit record was read back successfully; department count verified as 200. Supervisor and programme are marked Not recorded because those fields were absent. Source registration numbers are retained in private import provenance rather than published repository content.
 
+
+## Topic-first supervisor registration
+The owner requested that supervisors search a topic before entering student name and registration number. The lecturer workspace now offers this flow: matching archive titles block this registration path; no match reveals name, registration number and academic session. Programme defaults to BSc Biochemistry and level Final year for this pilot. Saving creates a student record, self-supervised project with the proposed title, and immutable allocation event atomically. It does not approve the topic or create milestones. HODs retain departmental visibility and reassignment controls; lecturers cannot capture existing students or create projects for another supervisor or department.
+All 200 imported historical entries were corrected to programme Biochemistry with no supervisor field, preserving earlier audit snapshots. New archive forms request name, title and year only. Duplicate checks accommodate older imported IDs.
+Validation: synthetic UI verified matching-title block, no-match student form and save feedback. GitHub run38126028032 passed nine local checks, build and seventeen Firestore permission tests, including department isolation, inactive staff, missing audit and existing-student takeover denial. Exact-title matching does not identify semantic similarity.
+
