@@ -1,0 +1,2 @@
+export function studentPage<T>(rows:T[],page:number){const pages=Math.max(1,Math.ceil(rows.length/25));const current=Math.min(Math.max(0,page),pages-1);return {rows:rows.slice(current*25,current*25+25),current,pages,first:rows.length?current*25+1:0,last:Math.min(rows.length,current*25+25)};}
+export function selectStudentPage(selected:string[],visible:string[],checked:boolean){const next=new Set(selected);for(const id of visible){if(checked)next.add(id);else next.delete(id);}return [...next];}

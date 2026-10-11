@@ -1,0 +1,3 @@
+export default function StudentPagination({current,pages,first,last,total,busy,onPage}:{current:number;pages:number;first:number;last:number;total:number;busy:boolean;onPage:(page:number)=>void}){
+ return <div className="allocation-toolbar"><span>Showing {first}–{last} of {total} matching students · Page {current+1} of {pages}</span><div className="form-actions"><button className="secondary" disabled={busy||current===0} onClick={()=>onPage(current-1)}>Previous student page</button><button className="secondary" disabled={busy||current===pages-1} onClick={()=>onPage(current+1)}>Next student page</button></div></div>;
+}
