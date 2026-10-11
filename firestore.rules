@@ -7,7 +7,7 @@ service cloud.firestore {
   function role() { return get(self()).data.role; }
   function same(id) { return active() && get(self()).data.departmentId == id; }
   function hod(id) { return same(id) && role() == 'hod'; }
-  function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.trim().size() > 0; }
+  function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.matches('.*[^ ].*'); }
   function titleKey(value) { return value.replace('[^\\p{L}\\p{N}\\s]','').replace('\\s+',' ').trim(); }
   function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
   function studentPath(id) { return /databases/$(database)/documents/students/$(id); }
@@ -77,6 +77,7 @@ service cloud.firestore {
    return e.actorId == request.auth.uid && e.createdAt == request.time && e.supervisorId == p.supervisorId && e.coSupervisorId == p.coSupervisorId;
   }
 
+  function releaseNote(v) { return v is string && v.size() <= 2000 && v.trim().size() > 0; }
   function releasePath(id) { return /databases/$(database)/documents/releaseRequests/$(id); }
   function releaseChange(id) { let p=request.resource.data; let before=resource.data; let r=getAfter(releasePath(p.releaseRequestId)).data;
    return !before.keys().hasAny(['completedDate']) && r.projectId == id && r.departmentId == p.departmentId && r.updatedAt == request.time && r.updatedBy == request.auth.uid && p.updatedAt == request.time && p.updatedBy == request.auth.uid
@@ -94,10 +95,10 @@ service cloud.firestore {
    allow create: if request.resource.data.keys().hasOnly(['studentName','projectId','departmentId','supervisorId','reason','note','state','decisionNote','activity','createdAt','updatedAt','updatedBy','lastEventId'])
     && request.resource.data.studentName == get(studentPath(request.resource.data.projectId)).data.get('name','')
     && primary(get(projectPath(request.resource.data.projectId)).data) && request.resource.data.supervisorId == request.auth.uid && request.resource.data.departmentId == get(projectPath(request.resource.data.projectId)).data.departmentId
-    && request.resource.data.reason in ['Non-responsive','Not serious about the work','Other'] && text(request.resource.data.note,2000) && request.resource.data.state == 'Pending' && request.resource.data.decisionNote == '' && request.resource.data.createdAt == request.time
+    && request.resource.data.reason in ['Non-responsive','Not serious about the work','Other'] && releaseNote(request.resource.data.note) && request.resource.data.state == 'Pending' && request.resource.data.decisionNote == '' && request.resource.data.createdAt == request.time
     && request.resource.data.activity == {'milestones':get(projectPath(request.resource.data.projectId)).data.get('milestones',{}),'lastProjectUpdate':get(projectPath(request.resource.data.projectId)).data.get('updatedAt',null),'contactEvidence':'Not recorded','uploadEvidence':'Uploads disabled'}
     && getAfter(projectPath(request.resource.data.projectId)).data.releaseRequestId == rid && getAfter(projectPath(request.resource.data.projectId)).data.releaseState == 'Pending' && audit(request.resource.data);
-   allow update: if hod(resource.data.departmentId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','decisionNote','updatedBy','updatedAt','lastEventId']) && text(request.resource.data.decisionNote,2000)
+   allow update: if hod(resource.data.departmentId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','decisionNote','updatedBy','updatedAt','lastEventId']) && releaseNote(request.resource.data.decisionNote)
     && ((resource.data.state == 'Pending' && request.resource.data.state in ['Declined','Reassigned','Withheld']) || (resource.data.state == 'Withheld' && request.resource.data.state == 'Reinstated'))
     && getAfter(projectPath(resource.data.projectId)).data.releaseState == request.resource.data.state && getAfter(projectPath(resource.data.projectId)).data.releaseRequestId == rid && getAfter(projectPath(resource.data.projectId)).data.updatedAt == request.time && audit(request.resource.data);
    allow delete: if false;
