@@ -1,0 +1,5 @@
+import type {Project} from './models';import {overdue} from './workflow.ts';
+export type ProjectFilter='all'|'active'|'overdue'|'awaitingTopic'|'defence'|'completed';
+export function overdueCount(p:Project,today:string){return p.completedDate?0:Object.values(p.milestones||{}).filter(m=>overdue(m,today)).length;}
+export function matchesProjectFilter(p:Project|undefined,filter:ProjectFilter,today:string){if(filter==='all')return true;if(!p)return false;if(filter==='completed')return !!p.completedDate;if(p.completedDate)return false;if(filter==='overdue')return overdueCount(p,today)>0;if(filter==='awaitingTopic')return p.topicDecision!=='Approved';if(filter==='defence')return !!p.defenceCleared;return true;}
+export function projectOverview(projects:Project[],today:string){const filters=['active','overdue','awaitingTopic','defence','completed'] as const;return Object.fromEntries(filters.map(filter=>[filter,projects.filter(p=>matchesProjectFilter(p,filter,today)).length])) as Record<typeof filters[number],number>;}
