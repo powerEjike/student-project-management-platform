@@ -16,6 +16,12 @@ before(async () => {
 });
 after(async()=>await env?.cleanup());
 
+test('temporary Unicode normalization diagnostic',async()=>{
+ const probe=await initializeTestEnvironment({projectId:'demo-unicode-probe',firestore:{rules:"rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { match /probe/{id} { allow write: if (id == 'lower' && request.resource.data.value == 'Étude du résumé!'.lower()) || (id == 'replace' && request.resource.data.value == 'étude du résumé!'.replace('[^\\\\p{L}\\\\p{N}\\\\s]','')) || (id == 'text' && 'Étude du résumé!'.matches('.*[^ ].*')); } } }"}});
+ for(const [id,value] of [['lower','étude du résumé!'],['replace','étude du résumé'],['text','ok']])await setDoc(doc(probe.unauthenticatedContext().firestore(),'probe',id),{value}).then(()=>console.log(`Unicode probe ${id}: accepted`),()=>console.log(`Unicode probe ${id}: denied`));
+ await probe.cleanup();
+});
+
 test('archive creation and withdrawal are HOD-only, scoped, atomic and preserve original details',async()=>{
  const id='a'.repeat(64);const db=env.authenticatedContext('hod-a').firestore();
  const details={departmentId:'dept-a',title:'  ENZYME:  Activity In Maize! ',titleKey:'enzyme activity in maize',author:'Synthetic author',year:2024,supervisor:'Historical supervisor',programme:'BSc Biochemistry',active:true};
