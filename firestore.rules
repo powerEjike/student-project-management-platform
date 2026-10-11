@@ -152,6 +152,16 @@ service cloud.firestore {
    allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
    allow delete: if false;
   }
+  match /departmentSettings/{id} {
+   allow get: if active() && (role() == 'admin' || hod(id));
+   allow create,update: if active() && (role() == 'admin' || hod(id))
+    && exists(/databases/$(database)/documents/departments/$(id))
+    && request.resource.data.keys().hasAll(['primaryLimit','updatedBy','updatedAt'])
+    && request.resource.data.keys().hasOnly(['primaryLimit','updatedBy','updatedAt'])
+    && request.resource.data.primaryLimit is int && request.resource.data.primaryLimit >= 0 && request.resource.data.primaryLimit <= 1000
+    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+   allow list,delete: if false;
+  }
   match /archive/{id} {
    allow get: if (active() && role() == 'hod' && !exists(/databases/$(database)/documents/archive/$(id))) || (active() && role() != 'admin' && same(resource.data.departmentId));
    allow list: if active() && role() != 'admin' && same(resource.data.departmentId);

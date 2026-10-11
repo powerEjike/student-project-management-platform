@@ -270,3 +270,11 @@ test('Super Admin roster import preserves existing students and cannot allocate 
  await assertSucceeds(setDoc(doc(db,'rosterImports','synthetic-import'),receipt));await assertFails(updateDoc(doc(db,'rosterImports','synthetic-import'),{added:2}));await assertFails(deleteDoc(doc(db,'rosterImports','synthetic-import')));
  await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'rosterImports','synthetic-import')));for(const uid of ['hod-b','sup'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'rosterImports','synthetic-import')));
 });
+
+test('department allocation settings are scoped to HOD or admin with valid limits and trusted stamps',async()=>{
+ const setting=(uid,id='dept-a',overrides={})=>{const db=env.authenticatedContext(uid).firestore();return setDoc(doc(db,'departmentSettings',id),{primaryLimit:10,updatedBy:uid,updatedAt:serverTimestamp(),...overrides});};
+ for(const uid of ['sup','co','other','foreign','inactive','hod-b'])await assertFails(setting(uid));
+ await assertFails(setting('hod-a','missing'));for(const primaryLimit of [-1,1001,1.5,'10'])await assertFails(setting('hod-a','dept-a',{primaryLimit}));await assertFails(setting('hod-a','dept-a',{updatedBy:'admin'}));await assertFails(setting('hod-a','dept-a',{extra:true}));
+ await assertSucceeds(setting('hod-a'));await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'departmentSettings','dept-a')));for(const uid of ['sup','co','hod-b','inactive'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-a')));
+ await assertSucceeds(setting('admin','dept-a',{primaryLimit:20}));await assertSucceeds(setting('hod-a','dept-a',{primaryLimit:0}));await assertFails(deleteDoc(doc(env.authenticatedContext('hod-a').firestore(),'departmentSettings','dept-a')));await assertFails(getDocs(collection(env.authenticatedContext('admin').firestore(),'departmentSettings')));
+});
