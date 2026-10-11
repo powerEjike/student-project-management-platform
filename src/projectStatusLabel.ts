@@ -1,0 +1,2 @@
+import type {Project} from './models';
+export function projectStatusLabel(project:Project|undefined){if(!project)return 'Awaiting allocation';if(project.completedDate)return 'Defence finished & archived';if(project.releaseState==='Withheld')return 'Withheld';if(project.releaseState==='Pending')return 'Release requested';if(project.defenceCleared)return 'Completed — ready for defence';return project.status;}
