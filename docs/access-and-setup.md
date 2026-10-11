@@ -72,3 +72,7 @@ The owner requested that supervisors search a topic before entering student name
 All 200 imported historical entries were corrected to programme Biochemistry with no supervisor field, preserving earlier audit snapshots. New archive forms request name, title and year only. Duplicate checks accommodate older imported IDs.
 Validation: synthetic UI verified matching-title block, no-match student form and save feedback. GitHub run38126028032 passed nine local checks, build and seventeen Firestore permission tests, including department isolation, inactive staff, missing audit and existing-student takeover denial. Exact-title matching does not identify semantic similarity.
 
+
+## ProjectTrack address
+The owner requested ProjectTrack in the URL. New primary address: https://projecttrack-biochemistry.web.app (the shorter projecttrack site ID was already reserved). Both new Hosting domains were added to Firebase Auth authorized domains and the existing restricted browser key's referrer allowlist; API targets and old domains are preserved. Firebase Hosting configuration deploys the same tested app to both addresses.
+
