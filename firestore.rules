@@ -50,6 +50,19 @@ service cloud.firestore {
     && ((p.defenceCleared && resource.data.topicDecision == 'Approved' && p.defenceDate == request.time && text(p.defenceOverride,2000)) || (!p.defenceCleared && p.defenceDate == null && p.defenceOverride == '' && text(p.defenceNote,2000)))
     && text(p.lastDefenceEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
+  function completionActor(p) { return hod(p.departmentId) || primary(p); }
+  function completedArchive(id) { let a=request.resource.data; let p=getAfter(projectPath(a.sourceProjectId)).data; let s=get(studentPath(a.sourceProjectId)).data;
+   return completionActor(get(projectPath(a.sourceProjectId)).data) && !get(projectPath(a.sourceProjectId)).data.keys().hasAny(['completedDate']) && p.status == 'Completed' && p.archiveId == id
+    && a.departmentId == p.departmentId && a.title == p.title && a.author == s.name && a.programme == s.programme && p.completedDate.matches(string(a.year)+'-[0-9]{2}-[0-9]{2}');
+  }
+  function completionChange(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/projects/$(id)/completionHistory/$(p.lastCompletionEventId)).data; let a=getAfter(/databases/$(database)/documents/archive/$(p.archiveId)).data; let parts=p.completedDate.split('-');
+   return completionActor(resource.data) && !resource.data.keys().hasAny(['completedDate']) && resource.data.defenceCleared == true && resource.data.topicDecision == 'Approved'
+    && p.diff(resource.data).affectedKeys().hasOnly(['status','completedDate','completedBy','completedByName','completionNote','archiveId','lastCompletionEventId','updatedBy','updatedAt'])
+    && p.status == 'Completed' && p.completedDate.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && timestamp.date(int(parts[0]),int(parts[1]),int(parts[2])) <= request.time + duration.value(1,'h')
+    && p.completedBy == request.auth.uid && p.completedByName == get(self()).data.displayName && p.completionNote is string && p.completionNote.size() <= 2000
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.archiveId.matches('[a-f0-9]{64}') && text(p.lastCompletionEventId,128)
+    && a.sourceProjectId == id && a.createdBy == request.auth.uid && a.createdAt == request.time && e.actorId == request.auth.uid && e.createdAt == request.time;
+  }
   function access(p) { return active() && role() != 'admin' && same(p.departmentId) && (role() == 'hod' || p.supervisorId == request.auth.uid || p.get('coSupervisorId','') == request.auth.uid); }
   function hodStudent(id) { return active() && role() == 'hod' && exists(studentPath(id)) && hod(get(studentPath(id)).data.departmentId); }
   function lecturer(id,departmentId) { return exists(staffPath(id)) && get(staffPath(id)).data.active == true && get(staffPath(id)).data.role == 'lecturer' && get(staffPath(id)).data.departmentId == departmentId; }
@@ -101,8 +114,8 @@ service cloud.firestore {
   match /archive/{id} {
    allow get: if (active() && role() == 'hod' && !exists(/databases/$(database)/documents/archive/$(id))) || (active() && role() != 'admin' && same(resource.data.departmentId));
    allow list: if active() && role() != 'admin' && same(resource.data.departmentId);
-   allow create: if hod(request.resource.data.departmentId) && id.matches('[a-f0-9]{64}')
-    && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId'])
+   allow create: if ((request.resource.data.keys().hasAny(['sourceProjectId']) && completedArchive(id)) || (!request.resource.data.keys().hasAny(['sourceProjectId']) && hod(request.resource.data.departmentId))) && id.matches('[a-f0-9]{64}')
+    && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','sourceProjectId','createdBy','createdAt','updatedBy','updatedAt','lastEventId'])
     && text(request.resource.data.title,300) && request.resource.data.titleKey.matches('[\\p{L}\\p{N} ]+') && !request.resource.data.titleKey.matches('.*\\p{Lu}.*') && titleKey(request.resource.data.title).matches('(?i)' + request.resource.data.titleKey) && text(request.resource.data.titleKey,300)
     && text(request.resource.data.author,120) && text(request.resource.data.programme,80)
     && request.resource.data.year is int && request.resource.data.year >= 1900 && request.resource.data.year <= 2100 && request.resource.data.active == true
@@ -114,8 +127,8 @@ service cloud.firestore {
    function archiveAudit(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/archive/$(id)/history/$(p.lastEventId)).data; return p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastEventId,128) && e.actorId == request.auth.uid && e.recordedAt == request.time; }
    match /history/{eventId} {
     allow read: if hod(get(/databases/$(database)/documents/archive/$(id)).data.departmentId);
-    allow create: if hod(getAfter(/databases/$(database)/documents/archive/$(id)).data.departmentId)
-     && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId','actorId','recordedAt','reason'])
+    allow create: if (hod(getAfter(/databases/$(database)/documents/archive/$(id)).data.departmentId) || (request.resource.data.keys().hasAny(['sourceProjectId']) && completedArchive(id)))
+     && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','sourceProjectId','createdBy','createdAt','updatedBy','updatedAt','lastEventId','actorId','recordedAt','reason'])
      && request.resource.data.diff(getAfter(/databases/$(database)/documents/archive/$(id)).data).affectedKeys().hasOnly(['actorId','recordedAt','reason'])
      && request.resource.data.lastEventId == eventId && request.resource.data.actorId == request.auth.uid && request.resource.data.recordedAt == request.time && text(request.resource.data.reason,500);
     allow update,delete: if false;
@@ -163,10 +176,10 @@ service cloud.firestore {
     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
     && (request.resource.data.title == '' || (lecturerNew(id) && text(request.resource.data.title,300))) && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && allocation(request.resource.data) && event(id,request.resource.data);
-   allow update: if (hod(resource.data.departmentId)
+   allow update: if ((!resource.data.keys().hasAny(['completedDate']) && ((hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
     && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
-    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id);
+    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id))) || completionChange(id));
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);
@@ -181,6 +194,13 @@ service cloud.firestore {
     allow update,delete: if false;
    }
    match /submissions/{submissionId} { allow read: if access(get(projectPath(id)).data); allow write: if false; }
+   match /completionHistory/{eventId} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if completionActor(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['date','note','archiveId','actorId','actorName','createdAt','archiveConsentConfirmed'])
+     && getAfter(projectPath(id)).data.lastCompletionEventId == eventId && request.resource.data.date == getAfter(projectPath(id)).data.completedDate && request.resource.data.note == getAfter(projectPath(id)).data.completionNote && request.resource.data.archiveId == getAfter(projectPath(id)).data.archiveId
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.archiveConsentConfirmed == true;
+    allow update,delete: if false;
+   }
    match /defenceHistory/{eventId} {
     allow read: if access(get(projectPath(id)).data);
     allow create: if primary(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['cleared','previousCleared','note','override','actorId','actorName','createdAt'])
