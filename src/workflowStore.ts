@@ -1,3 +1,4 @@
+import {quickMilestone} from './quickMilestone';
 import {collection,doc,getFirestore,onSnapshot,runTransaction,serverTimestamp} from 'firebase/firestore';
 import {app} from './firebase';
 import {milestonesFrom,programmeKey,templateIdFor,type TemplateStep,type Milestone} from './workflow';
@@ -28,3 +29,5 @@ export async function updateMilestone(projectId:string,key:string,milestone:Mile
  });
 }
 export function watchWorkflowHistory(projectId:string,kind:'topicHistory'|'progressHistory',receive:(items:any[])=>void,fail:()=>void){return onSnapshot(collection(db,'projects',projectId,kind),s=>receive(s.docs.map(d=>({id:d.id,...d.data()})).sort((a:any,b:any)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))),fail);}
+
+export async function quickUpdateMilestone(projectId:string,key:string,status:string,note:string,expectedStatus:string,uid:string){await runTransaction(db,async tx=>{const ref=doc(db,'projects',projectId);const before=(await tx.get(ref)).data();if(!before?.milestones?.[key])throw Error('This stage no longer exists.');if(before.completedDate||before.releaseState==='Withheld'||before.supervisorId!==uid||before.topicDecision!=='Approved')throw Error('This project cannot receive a quick progress update.');const actor=(await tx.get(doc(db,'staff',uid))).data();const next=quickMilestone(before.milestones[key],status,note,expectedStatus);const event=doc(collection(ref,'progressHistory'));tx.update(ref,{milestones:{...before.milestones,[key]:next},lastMilestoneKey:key,lastProgressEventId:event.id,updatedBy:uid,updatedAt:serverTimestamp()});tx.set(event,{milestoneKey:key,previous:before.milestones[key],current:next,actorId:uid,actorName:actor!.displayName,createdAt:serverTimestamp()});});}
