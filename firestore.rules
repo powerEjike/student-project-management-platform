@@ -209,7 +209,7 @@ service cloud.firestore {
     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
     && (request.resource.data.title == '' || (lecturerNew(id) && text(request.resource.data.title,300))) && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && allocation(request.resource.data) && event(id,request.resource.data);
-   allow update: if (releaseChange(id) || ((!resource.data.keys().hasAny(['completedDate']) && ((!(resource.data.get('releaseState','') in ['Pending','Withheld']) && hod(resource.data.departmentId)
+   allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasAny(['releaseState','releaseRequestId']) ? releaseChange(id) : ((!resource.data.keys().hasAny(['completedDate']) && ((!(resource.data.get('releaseState','') in ['Pending','Withheld']) && hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
     && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
     && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id))) || completionChange(id)));
