@@ -73,6 +73,7 @@ test('Super Admin alone manages validated programme templates with an atomic imm
  await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'milestoneTemplates','dept-a__MISSING')));
  await assertFails(getDoc(doc(env.authenticatedContext('hod-b').firestore(),'milestoneTemplates',id)));
  const db=env.authenticatedContext('admin').firestore();await assertFails(updateDoc(doc(db,'milestoneTemplates',id),{steps:[{name:'Bypass audit',days:8}]}));await assertFails(deleteDoc(doc(db,'milestoneTemplates',id,'history','template-1')));
+ await assertSucceeds(save('admin',Array.from({length:10},(_,i)=>({name:`Stage ${i+1}`,days:i*7})),'template-10'));
 });
 test('rules restrict project reads, including nested submissions',async()=>{
   for(const uid of ['hod-a','sup','co']) for(const path of ['projects/p1','projects/p1/submissions/v1']) await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),path)));
