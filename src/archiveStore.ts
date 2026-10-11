@@ -1,8 +1,9 @@
 import {collection,doc,getDocs,getFirestore,onSnapshot,query,runTransaction,serverTimestamp,where} from 'firebase/firestore';
 import {app} from './firebase';import {archiveId,titleKey,type ArchiveEntry,type ArchiveInput} from './archive';
+import {findTopicMatches} from './topicSimilarity';
 const db=getFirestore(app!);
 export function watchArchive(departmentId:string,receive:(items:ArchiveEntry[])=>void,fail:()=>void){return onSnapshot(query(collection(db,'archive'),where('departmentId','==',departmentId)),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as ArchiveEntry))),fail);}
-export async function checkArchive(departmentId:string,title:string){if(!titleKey(title))throw new Error('Enter a topic title containing letters or numbers.');const result=await getDocs(query(collection(db,'archive'),where('departmentId','==',departmentId),where('titleKey','==',titleKey(title)),where('active','==',true)));return result.docs.map(d=>({id:d.id,...d.data()} as ArchiveEntry));}
+export async function checkArchive(departmentId:string,title:string){if(!titleKey(title))throw new Error('Enter a topic title containing letters or numbers.');const result=await getDocs(query(collection(db,'archive'),where('departmentId','==',departmentId),where('active','==',true)));return findTopicMatches(title,result.docs.map(d=>({id:d.id,...d.data()} as ArchiveEntry)));}
 export async function addArchiveEntry(departmentId:string,input:ArchiveInput,uid:string){
  const value={title:input.title.trim(),author:input.author.trim(),year:input.year,programme:input.programme.trim()};
  if(!titleKey(value.title)||!value.author||!value.programme||!Number.isInteger(value.year)||value.year<1900||value.year>2100)throw new Error('Enter all archive details and a valid year.');
