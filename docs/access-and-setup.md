@@ -88,3 +88,8 @@ The assigned primary supervisor can clear an approved topic for defence with an 
 HODs can filter cleared students by academic session, programme, supervisor and inclusive Lagos clearance dates. PDF and Excel downloads contain student name, registration number, title, supervisor, programme, level, session and clearance date, with generation details and an HOD signature area. Export libraries load only when requested; PDFs embed licensed Noto Sans for accented names. Completion after defence and automatic archival remain a separate future delivery.
 Validation: twelve local checks and eighteen Firestore permission tests passed run38128929601. Synthetic UI verified clearance adds a student, withdrawal removes them, and PDF/Excel downloads. Downloaded files were read back; a 45-student report preserved accented names and final record across multiple PDF pages. No real student was cleared by the operator. Billing and uploads remain disabled.
 
+
+## Recovery after deployment
+An old open tab could retain the previous app entry while its lazy-loaded staff module had been removed by a later Hosting deployment. That import error was displayed as an inability to check staff access. The reported incident was reproduced in the owner session; refreshing restored the Super Admin workspace. All three pilot staff approvals were independently verified active.
+Staff module loading now detects known stale-import errors and refreshes once with a session guard; successful profile loading resets the guard. The access-error screen also offers Refresh workspace. Real permission failures do not trigger automatic reload. Thirteen local checks passed, including this distinction. No passwords, roles or database permissions changed.
+
