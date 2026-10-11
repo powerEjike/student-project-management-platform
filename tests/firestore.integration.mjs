@@ -63,7 +63,7 @@ async function topicDecision(id,uid='sup',options={}){
  const {decision='Approved',eventId='topic-1',note='',previousDecision='Awaiting topic',steps=[{name:'Proposal',days:14},{name:'Final Submission',days:112}],actor=uid}=options;
  const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);
  const milestones=decision==='Approved'?Object.fromEntries(steps.map((s,i)=>[`m${i}`,{name:s.name,dueDate:'2027-01-31',status:'Not started',note:''}])):{};
- batch.update(doc(db,'projects',id),{title:'Synthetic research topic',abstract:'A short synthetic abstract.',topicDecision:decision,decisionNote:note,topicApprovedBy:decision==='Approved'?uid:'',topicApprovedAt:decision==='Approved'?serverTimestamp():null,templateId:decision==='Approved'?'dept-a__BSCBIOCHEMISTRY':'',milestonePlan:decision==='Approved'?steps:[],milestones,status:decision==='Approved'?'Research in progress':decision,updatedBy:uid,updatedAt:serverTimestamp(),lastTopicEventId:eventId});
+ batch.update(doc(db,'projects',id),{title:'Synthetic research topic',abstract:'A short synthetic abstract.',topicDecision:decision,decisionNote:note,topicApprovedBy:decision==='Approved'?uid:'',topicApprovedAt:decision==='Approved'?serverTimestamp():null,templateId:decision==='Approved'?'dept-a__BSCBIOCHEMISTRY':'',milestonePlan:decision==='Approved'?steps:[],milestones,status:decision==='Approved'?'Research in progress':decision,updatedBy:uid,updatedAt:serverTimestamp(),lastSupervisorUpdateAt:options.updateTime===undefined?serverTimestamp():options.updateTime,lastTopicEventId:eventId});
  batch.set(doc(db,'projects',id,'topicHistory',eventId),{title:'Synthetic research topic',abstract:'A short synthetic abstract.',decision,note,previousDecision,actorId:actor,actorName:actor,createdAt:serverTimestamp()});return batch.commit();
 }
 
@@ -71,7 +71,7 @@ test('only the assigned supervisor decides topics and approval requires the prog
  const id='workflow-topic';await seedWorkflow(id);
  for(const uid of ['admin','hod-a','hod-b','co','other','inactive-sup'])await assertFails(topicDecision(id,uid));
  const db=env.authenticatedContext('sup').firestore();await assertFails(updateDoc(doc(db,'projects',id),{title:'Bypassed approval'}));
- await assertFails(topicDecision(id,'sup',{actor:'co'}));
+ await assertFails(topicDecision(id,'sup',{actor:'co'}));await assertFails(topicDecision(id,'sup',{updateTime:null}));for(const uid of ['sup','hod-a','admin','co'])await assertFails(updateDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id),{lastSupervisorUpdateAt:serverTimestamp()}));
  await assertFails(topicDecision(id,'sup',{steps:[{name:'Wrong stage',days:14}]}));
  await assertFails(topicDecision(id,'sup',{decision:'Rejected'}));
  await assertSucceeds(topicDecision(id,'sup',{decision:'Changes requested',note:'Narrow the scope.'}));
@@ -92,12 +92,12 @@ test('progress and deadline changes require the current primary supervisor and i
  async function progress(uid='sup',options={}){
   const {eventId='progress-1',actor=uid,name='Proposal',before=previous,changeSecond=false}=options;const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);
   const value={...current,name};const milestones={m0:value,m1:{name:'Final Submission',dueDate:'2027-01-31',status:changeSecond?'Completed':'Not started',note:''}};
-  batch.update(doc(db,'projects',id),{milestones,lastMilestoneKey:'m0',lastProgressEventId:eventId,updatedBy:uid,updatedAt:serverTimestamp()});batch.set(doc(db,'projects',id,'progressHistory',eventId),{milestoneKey:'m0',previous:before,current:value,actorId:actor,actorName:actor,createdAt:serverTimestamp()});return batch.commit();
+  batch.update(doc(db,'projects',id),{milestones,lastMilestoneKey:'m0',lastSupervisorUpdateAt:options.updateTime===undefined?serverTimestamp():options.updateTime,lastProgressEventId:eventId,updatedBy:uid,updatedAt:serverTimestamp()});batch.set(doc(db,'projects',id,'progressHistory',eventId),{milestoneKey:'m0',previous:before,current:value,actorId:actor,actorName:actor,createdAt:serverTimestamp()});return batch.commit();
  }
  for(const uid of ['admin','hod-a','co','other'])await assertFails(progress(uid));
- await assertFails(progress('sup',{name:'Renamed stage'}));await assertFails(progress('sup',{changeSecond:true}));await assertFails(progress('sup',{before:{...previous,status:'Completed'}}));await assertFails(progress('sup',{actor:'co'}));
+ await assertFails(progress('sup',{updateTime:null}));await assertFails(progress('sup',{name:'Renamed stage'}));await assertFails(progress('sup',{changeSecond:true}));await assertFails(progress('sup',{before:{...previous,status:'Completed'}}));await assertFails(progress('sup',{actor:'co'}));
  const db=env.authenticatedContext('sup').firestore();await assertFails(updateDoc(doc(db,'projects',id),{'milestones.m0.status':'Completed'}));await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Withheld'}));await assertFails(progress());await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Reinstated'}));await assertSucceeds(progress());
- await assertFails(deleteDoc(doc(db,'projects',id,'progressHistory','progress-1')));
+ const stamp=(await getDoc(doc(db,'projects',id))).data().lastSupervisorUpdateAt;const auditTime=(await getDoc(doc(db,'projects',id,'progressHistory','progress-1'))).data().createdAt;if(!stamp.isEqual(auditTime))throw Error('Progress tracking must use the same server time as its audit');await assertFails(updateDoc(doc(db,'projects',id),{lastSupervisorUpdateAt:serverTimestamp()}));await assertFails(deleteDoc(doc(db,'projects',id,'progressHistory','progress-1')));
  await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{supervisorId:'other',coSupervisorId:''}));
  await assertFails(progress('sup',{eventId:'progress-2',before:current}));await assertFails(getDoc(doc(db,'projects',id,'progressHistory','progress-1')));
  await assertSucceeds(getDoc(doc(env.authenticatedContext('other').firestore(),'projects',id,'progressHistory','progress-1')));

@@ -24,9 +24,9 @@ service cloud.firestore {
    let p=request.resource.data;
    let e=getAfter(/databases/$(database)/documents/projects/$(id)/topicHistory/$(p.lastTopicEventId)).data;
    return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && resource.data.get('topicDecision','Awaiting topic') != 'Approved'
-    && p.diff(resource.data).affectedKeys().hasOnly(['title','abstract','topicDecision','decisionNote','topicApprovedBy','topicApprovedAt','templateId','milestonePlan','milestones','status','updatedBy','updatedAt','lastTopicEventId'])
+    && p.diff(resource.data).affectedKeys().hasOnly(['title','abstract','topicDecision','decisionNote','topicApprovedBy','topicApprovedAt','templateId','milestonePlan','milestones','status','updatedBy','updatedAt','lastSupervisorUpdateAt','lastTopicEventId'])
     && text(p.title,300) && text(p.abstract,3000) && p.topicDecision in ['Approved','Rejected','Changes requested'] && p.decisionNote is string && p.decisionNote.size() <= 2000 && (p.topicDecision == 'Approved' || text(p.decisionNote,2000))
-    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastTopicEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastTopicEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time
     && ((p.topicDecision == 'Approved' && p.status == 'Research in progress' && p.topicApprovedBy == request.auth.uid && p.topicApprovedAt == request.time
       && p.templateId == resource.data.departmentId + '__' + get(studentPath(id)).data.programme.upper().replace('[^A-Z0-9]','')
       && p.milestonePlan == get(/databases/$(database)/documents/milestoneTemplates/$(p.templateId)).data.steps && initialMilestones(p))
@@ -37,10 +37,10 @@ service cloud.firestore {
    let key=p.lastMilestoneKey;
    let e=getAfter(/databases/$(database)/documents/projects/$(id)/progressHistory/$(p.lastProgressEventId)).data;
    return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && resource.data.topicDecision == 'Approved'
-    && p.diff(resource.data).affectedKeys().hasOnly(['milestones','lastMilestoneKey','lastProgressEventId','updatedBy','updatedAt'])
+    && p.diff(resource.data).affectedKeys().hasOnly(['milestones','lastMilestoneKey','lastProgressEventId','lastSupervisorUpdateAt','updatedBy','updatedAt'])
     && key in resource.data.milestones && p.milestones.diff(resource.data.milestones).affectedKeys().hasOnly([key]) && p.milestones.size() == resource.data.milestones.size()
     && validMilestone(p.milestones[key]) && p.milestones[key].name == resource.data.milestones[key].name
-    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
   function defenceChange(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/projects/$(id)/defenceHistory/$(p.lastDefenceEventId)).data;
    return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['defenceCleared','defenceDate','defenceBy','defenceByName','defenceNote','defenceOverride','lastDefenceEventId','updatedBy','updatedAt'])
