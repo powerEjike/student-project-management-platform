@@ -197,12 +197,23 @@ service cloud.firestore {
    }
   }
   function lecturerNew(id) { let p=getAfter(projectPath(id)).data; let s=getAfter(studentPath(id)).data; return !exists(projectPath(id)) && primary(p) && s.departmentId == get(self()).data.departmentId && s.departmentId == p.departmentId && s.createdBy == request.auth.uid && s.createdAt == request.time && p.coSupervisorId == '' && p.createdBy == request.auth.uid && p.createdAt == request.time; }
+  match /rosterImports/{id} {
+   allow read: if active() && (role() == 'admin' || hod(resource.data.departmentId));
+   allow create: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentId','session','admissionSession','added','skipped','actorId','createdAt'])
+    && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId)) && text(request.resource.data.session,80) && text(request.resource.data.admissionSession,80)
+    && request.resource.data.added is int && request.resource.data.added > 0 && request.resource.data.added <= 10 && request.resource.data.skipped is int && request.resource.data.skipped >= 0 && request.resource.data.skipped <= 10
+    && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
+   allow update,delete: if false;
+  }
   match /students/{id} {
-   allow get: if (active() && role() == 'lecturer' && !exists(studentPath(id))) || (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
-   allow list: if hod(resource.data.departmentId);
-   allow create: if (hod(request.resource.data.departmentId) || lecturerNew(id)) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
-    && request.resource.data.keys().hasOnly(['departmentId','name','matricNumber','matricKey','programme','level','session','email','createdBy','createdAt'])
+   allow get: if (active() && role() == 'admin') || (active() && role() == 'lecturer' && !exists(studentPath(id))) || (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
+   allow list: if (active() && role() == 'admin') || hod(resource.data.departmentId);
+   allow create: if ((active() && role() == 'admin') || hod(request.resource.data.departmentId) || lecturerNew(id)) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+    && request.resource.data.keys().hasOnly(['departmentId','name','matricNumber','matricKey','programme','level','session','email','admissionSession','currentCGPA','gender','createdBy','createdAt'])
     && text(request.resource.data.name,120) && text(request.resource.data.matricNumber,80) && text(request.resource.data.programme,80) && text(request.resource.data.level,80) && text(request.resource.data.session,80)
+    && (!request.resource.data.keys().hasAny(['admissionSession']) || (request.resource.data.admissionSession is string && request.resource.data.admissionSession.matches('[0-9]{4}/[0-9]{4}') && request.resource.data.admissionSession <= request.resource.data.session))
+    && (!request.resource.data.keys().hasAny(['currentCGPA']) || (request.resource.data.currentCGPA is number && request.resource.data.currentCGPA >= 0 && request.resource.data.currentCGPA <= 5))
+    && (!request.resource.data.keys().hasAny(['gender']) || text(request.resource.data.gender,40))
     && request.resource.data.email is string && request.resource.data.email.size() <= 254
     && request.resource.data.matricKey == request.resource.data.matricNumber.upper().replace('[^A-Z0-9]','') && request.resource.data.matricKey.matches('[A-Z0-9]{1,80}')
     && request.resource.data.session.upper().replace('[^A-Z0-9]','').matches('[A-Z0-9]{1,80}')

@@ -35,7 +35,7 @@ test('supervisor registration is atomic, departmental, self-assigned and cannot 
  for(const uid of ['admin','inactive-sup','foreign','hod-a'])await assertFails(registration(uid));
  await assertFails(registration('sup','dept-b'));await assertFails(registration('sup','dept-a','other'));await assertFails(registration('sup','dept-a','sup',false));await assertFails(registration('sup','dept-a','sup',true,false));
  await assertSucceeds(registration());await assertFails(registration('other'));await assertFails(registration());
- await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'students',id)));await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'students',id)));for(const uid of ['other','foreign','admin'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'students',id)));await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'students',id)));for(const uid of ['other','foreign'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
 });
 
 
@@ -78,7 +78,7 @@ test('only the assigned supervisor decides topics and approval requires the prog
  await assertSucceeds(topicDecision(id,'sup',{eventId:'topic-2',previousDecision:'Changes requested'}));
  await assertFails(topicDecision(id,'sup',{eventId:'topic-3',previousDecision:'Approved'}));
  for(const uid of ['hod-a','co'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
- for(const uid of ['admin','hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
+ for(const uid of ['hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
  await assertFails(updateDoc(doc(db,'projects',id,'topicHistory','topic-2'),{decision:'Rejected'}));
 });
 
@@ -156,8 +156,8 @@ test('student creation is department-scoped and canonical IDs prevent duplicate 
   await assertFails(setDoc(doc(db,'students',id),studentData('bio-001')));
   await assertFails(setDoc(doc(db,'students','random-id'),studentData('BIO/002')));
   await assertFails(setDoc(doc(db,'students',studentId('BIO003','dept-b')),studentData('BIO003','hod-a','dept-b')));
-  for(const uid of ['admin','sup','inactive','unapproved'])await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'students',studentId('BIO004')),studentData('BIO004',uid)));
-  await assertFails(getDoc(doc(env.authenticatedContext('admin').firestore(),'students',id)));
+  for(const uid of ['sup','inactive','unapproved'])await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'students',studentId('BIO004')),studentData('BIO004',uid)));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('admin').firestore(),'students',id)));
   await assertFails(deleteDoc(doc(db,'students',id)));
 });
 test('HOD roster queries are scoped; unassigned students remain private',async()=>{
@@ -201,12 +201,13 @@ test('lecturers may query only their assigned department projects',async()=>{
   await assertSucceeds(getDocs(query(collection(db,'projects'),where('departmentId','==','dept-a'),where('coSupervisorId','==','sup'))));
   await assertFails(getDocs(query(collection(db,'projects'),where('departmentId','==','dept-a'))));
 });
-test('Super Admin manages departments without access to student records',async()=>{
+test('Super Admin manages departments and rosters without project access',async()=>{
   const db=env.authenticatedContext('admin').firestore();
   await assertSucceeds(setDoc(doc(db,'departments','new-department'),{name:'New Department',createdBy:'admin',createdAt:serverTimestamp()}));
   await assertSucceeds(updateDoc(doc(db,'departments','new-department'),{name:'Renamed Department'}));
   await assertFails(setDoc(doc(env.authenticatedContext('hod-a').firestore(),'departments','bad-department'),{name:'Other Department',createdBy:'hod-a',createdAt:serverTimestamp()}));
-  await assertFails(getDocs(collection(db,'students')));
+  await assertSucceeds(getDocs(collection(db,'students')));
+  await assertFails(getDoc(doc(db,'projects','p1')));
 });
 
 test('Super Admin changes staff access atomically, cannot lock out self and keeps immutable audit records',async()=>{
@@ -255,4 +256,16 @@ test('meeting and contact records are primary-only, atomic, immutable, private a
  for(const uid of ['sup','hod-a'])await assertSucceeds(getDocs(collection(env.authenticatedContext(uid).firestore(),'projects',id,'contacts')));for(const uid of ['co','other','hod-b','admin','inactive-sup']){await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'contactSummary','current')));await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'contacts','contact-1')));}await assertFails(updateDoc(doc(db,'projects',id,'contacts','contact-1'),{note:'Edited history'}));await assertFails(deleteDoc(doc(db,'projects',id,'contacts','contact-1')));await assertFails(updateDoc(doc(db,'projects',id,'contactSummary','current'),{total:999}));
  async function request(contacts=snapshot){const b=writeBatch(db);b.set(doc(db,'releaseRequests','contact-release'),{studentName:'',projectId:id,departmentId:'dept-a',supervisorId:'sup',reason:'Other',note:'Review the recorded attempts',state:'Pending',decisionNote:'',activity:{milestones:{},lastProjectUpdate:null,contacts,uploadEvidence:'Uploads disabled'},createdAt:serverTimestamp(),updatedBy:'sup',updatedAt:serverTimestamp(),lastEventId:'request'});b.set(doc(db,'releaseRequests','contact-release','history','request'),{state:'Pending',note:'Review the recorded attempts',actorId:'sup',createdAt:serverTimestamp()});b.update(doc(db,'projects',id),{releaseState:'Pending',releaseRequestId:'contact-release',updatedBy:'sup',updatedAt:serverTimestamp()});return b.commit();}
  await assertFails(request({...snapshot,lastContact:'2010-01-01'}));await assertFails(request({}));await assertSucceeds(request());await assertSucceeds(log('sup',{date:'2020-03-04',channel:'Phone',outcome:'Contacted',note:'Contact while request pending'}));const frozen=(await getDoc(doc(db,'releaseRequests','contact-release'))).data();if(frozen.activity.contacts.lastContact!=='2020-03-01')throw Error('Release evidence must remain frozen');await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Withheld'}));await assertFails(log());await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Reinstated',completedDate:'2020-03-05'}));await assertFails(log());await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{supervisorId:'other',coSupervisorId:''}));await assertFails(getDoc(doc(db,'projects',id,'contacts','contact-1')));await assertSucceeds(getDoc(doc(env.authenticatedContext('other').firestore(),'projects',id,'contacts','contact-1')));
+});
+
+test('Super Admin roster import preserves existing students and cannot allocate or read projects',async()=>{
+ const db=env.authenticatedContext('admin').firestore();const id=studentId('ROSTER001');const data={...studentData('ROSTER001','admin'),admissionSession:'2022/2023',currentCGPA:3.35,gender:'Female'};
+ for(const extra of [{currentCGPA:5.1},{currentCGPA:'3.35'},{admissionSession:'2028/2029'},{gender:''}])await assertFails(setDoc(doc(db,'students',id),{...data,...extra}));
+ await assertSucceeds(setDoc(doc(db,'students',id),data));await assertSucceeds(getDoc(doc(db,'students',id)));await assertSucceeds(getDocs(collection(db,'students')));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'students',id)));
+ for(const uid of ['hod-b','sup','inactive','unapproved'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
+ await assertFails(setDoc(doc(db,'students',id),{...data,name:'Overwrite'}));await assertFails(deleteDoc(doc(db,'students',id)));await assertFails(assignment(db,id));await assertFails(getDoc(doc(db,'projects','p1')));
+ const receipt={departmentId:'dept-a',session:'2026/2027',admissionSession:'2022/2023',added:1,skipped:0,actorId:'admin',createdAt:serverTimestamp()};
+ await assertSucceeds(setDoc(doc(db,'rosterImports','synthetic-import'),receipt));await assertFails(updateDoc(doc(db,'rosterImports','synthetic-import'),{added:2}));await assertFails(deleteDoc(doc(db,'rosterImports','synthetic-import')));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'rosterImports','synthetic-import')));for(const uid of ['hod-b','sup'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'rosterImports','synthetic-import')));
 });
