@@ -7,7 +7,7 @@ service cloud.firestore {
   function role() { return get(self()).data.role; }
   function same(id) { return active() && get(self()).data.departmentId == id; }
   function hod(id) { return same(id) && role() == 'hod'; }
-  function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.matches('.*[^ ].*'); }
+  function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.trim().size() > 0; }
   function titleKey(value) { return value.replace('[^\\p{L}\\p{N}\\s]','').replace('\\s+',' ').trim(); }
   function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
   function studentPath(id) { return /databases/$(database)/documents/students/$(id); }
