@@ -11,6 +11,34 @@ service cloud.firestore {
   function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
   function studentPath(id) { return /databases/$(database)/documents/students/$(id); }
   function staffPath(id) { return /databases/$(database)/documents/staff/$(id); }
+  function primary(p) { return active() && role() == 'lecturer' && same(p.departmentId) && p.supervisorId == request.auth.uid; }
+  function step(steps,i) { return steps.size() <= i || (steps[i].keys().hasOnly(['name','days']) && text(steps[i].name,100) && steps[i].days is int && steps[i].days >= 0 && steps[i].days <= 730); }
+  function validSteps(steps) { return steps is list && steps.size() >= 1 && steps.size() <= 10 && step(steps,0) && step(steps,1) && step(steps,2) && step(steps,3) && step(steps,4) && step(steps,5) && step(steps,6) && step(steps,7) && step(steps,8) && step(steps,9); }
+  function validMilestone(m) { return m.keys().hasOnly(['name','dueDate','status','note']) && text(m.name,100) && m.dueDate is string && m.dueDate.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') && m.status in ['Not started','In progress','Under review','Completed','Delayed'] && m.note is string && m.note.size() <= 2000; }
+  function initialStep(p,i) { return p.milestonePlan.size() <= i || (validMilestone(p.milestones['m'+string(i)]) && p.milestones['m'+string(i)].name == p.milestonePlan[i].name && p.milestones['m'+string(i)].status == 'Not started' && p.milestones['m'+string(i)].note == ''); }
+  function initialMilestones(p) { return p.milestones is map && p.milestones.size() == p.milestonePlan.size() && initialStep(p,0) && initialStep(p,1) && initialStep(p,2) && initialStep(p,3) && initialStep(p,4) && initialStep(p,5) && initialStep(p,6) && initialStep(p,7) && initialStep(p,8) && initialStep(p,9); }
+  function topicChange(id) {
+   let p=request.resource.data;
+   let e=getAfter(/databases/$(database)/documents/projects/$(id)/topicHistory/$(p.lastTopicEventId)).data;
+   return primary(resource.data) && resource.data.get('topicDecision','Awaiting topic') != 'Approved'
+    && p.diff(resource.data).affectedKeys().hasOnly(['title','abstract','topicDecision','decisionNote','topicApprovedBy','topicApprovedAt','templateId','milestonePlan','milestones','status','updatedBy','updatedAt','lastTopicEventId'])
+    && text(p.title,300) && text(p.abstract,3000) && p.topicDecision in ['Approved','Rejected','Changes requested'] && p.decisionNote is string && p.decisionNote.size() <= 2000 && (p.topicDecision == 'Approved' || text(p.decisionNote,2000))
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastTopicEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time
+    && ((p.topicDecision == 'Approved' && p.status == 'Research in progress' && p.topicApprovedBy == request.auth.uid && p.topicApprovedAt == request.time
+      && p.templateId == resource.data.departmentId + '__' + get(studentPath(id)).data.programme.upper().replace('[^A-Z0-9]','')
+      && p.milestonePlan == get(/databases/$(database)/documents/milestoneTemplates/$(p.templateId)).data.steps && initialMilestones(p))
+      || (p.topicDecision != 'Approved' && p.status == p.topicDecision && p.topicApprovedBy == '' && p.topicApprovedAt == null && p.templateId == '' && p.milestonePlan == [] && p.milestones == {}));
+  }
+  function progressChange(id) {
+   let p=request.resource.data;
+   let key=p.lastMilestoneKey;
+   let e=getAfter(/databases/$(database)/documents/projects/$(id)/progressHistory/$(p.lastProgressEventId)).data;
+   return primary(resource.data) && resource.data.topicDecision == 'Approved'
+    && p.diff(resource.data).affectedKeys().hasOnly(['milestones','lastMilestoneKey','lastProgressEventId','updatedBy','updatedAt'])
+    && key in resource.data.milestones && p.milestones.diff(resource.data.milestones).affectedKeys().hasOnly([key]) && p.milestones.size() == resource.data.milestones.size()
+    && validMilestone(p.milestones[key]) && p.milestones[key].name == resource.data.milestones[key].name
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
+  }
   function access(p) { return active() && role() != 'admin' && same(p.departmentId) && (role() == 'hod' || p.supervisorId == request.auth.uid || p.get('coSupervisorId','') == request.auth.uid); }
   function hodStudent(id) { return active() && role() == 'hod' && exists(studentPath(id)) && hod(get(studentPath(id)).data.departmentId); }
   function lecturer(id,departmentId) { return exists(staffPath(id)) && get(staffPath(id)).data.active == true && get(staffPath(id)).data.role == 'lecturer' && get(staffPath(id)).data.departmentId == departmentId; }
@@ -59,6 +87,27 @@ service cloud.firestore {
    allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
    allow delete: if false;
   }
+  match /milestoneTemplates/{id} {
+   allow get: if active() && (role() == 'admin' || id.matches(get(self()).data.departmentId + '__[A-Z0-9]+'));
+   allow list: if active() && (role() == 'admin' || same(resource.data.departmentId));
+   allow create,update: if active() && role() == 'admin'
+    && request.resource.data.keys().hasOnly(['departmentId','programme','programmeKey','steps','updatedBy','updatedAt','lastEventId'])
+    && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+    && text(request.resource.data.programme,80) && request.resource.data.programmeKey == request.resource.data.programme.upper().replace('[^A-Z0-9]','') && text(request.resource.data.programmeKey,80)
+    && id == request.resource.data.departmentId + '__' + request.resource.data.programmeKey && validSteps(request.resource.data.steps)
+    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time && text(request.resource.data.lastEventId,128)
+    && getAfter(/databases/$(database)/documents/milestoneTemplates/$(id)/history/$(request.resource.data.lastEventId)).data.steps == request.resource.data.steps
+    && getAfter(/databases/$(database)/documents/milestoneTemplates/$(id)/history/$(request.resource.data.lastEventId)).data.actorId == request.auth.uid
+    && getAfter(/databases/$(database)/documents/milestoneTemplates/$(id)/history/$(request.resource.data.lastEventId)).data.createdAt == request.time;
+   allow delete: if false;
+   match /history/{eventId} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentId','programme','programmeKey','steps','updatedBy','updatedAt','lastEventId','actorId','createdAt'])
+     && request.resource.data.diff(getAfter(/databases/$(database)/documents/milestoneTemplates/$(id)).data).affectedKeys().hasOnly(['actorId','createdAt'])
+     && getAfter(/databases/$(database)/documents/milestoneTemplates/$(id)).data.lastEventId == eventId && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
+  }
   match /students/{id} {
    allow get: if (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
    allow list: if hod(resource.data.departmentId);
@@ -79,10 +128,10 @@ service cloud.firestore {
     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
     && request.resource.data.title == '' && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && allocation(request.resource.data) && event(id,request.resource.data);
-   allow update: if hod(resource.data.departmentId)
+   allow update: if (hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
     && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
-    && allocation(request.resource.data) && event(id,request.resource.data);
+    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id);
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);
@@ -97,6 +146,22 @@ service cloud.firestore {
     allow update,delete: if false;
    }
    match /submissions/{submissionId} { allow read: if access(get(projectPath(id)).data); allow write: if false; }
+   match /topicHistory/{eventId} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if primary(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['title','abstract','decision','note','previousDecision','actorId','actorName','createdAt'])
+     && getAfter(projectPath(id)).data.lastTopicEventId == eventId && request.resource.data.title == getAfter(projectPath(id)).data.title
+     && request.resource.data.abstract == getAfter(projectPath(id)).data.abstract && request.resource.data.decision == getAfter(projectPath(id)).data.topicDecision && request.resource.data.note == getAfter(projectPath(id)).data.decisionNote
+     && request.resource.data.previousDecision == get(projectPath(id)).data.get('topicDecision','Awaiting topic') && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
+   match /progressHistory/{eventId} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if primary(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['milestoneKey','previous','current','actorId','actorName','createdAt'])
+     && getAfter(projectPath(id)).data.lastProgressEventId == eventId && request.resource.data.milestoneKey == getAfter(projectPath(id)).data.lastMilestoneKey
+     && request.resource.data.previous == get(projectPath(id)).data.milestones[request.resource.data.milestoneKey] && request.resource.data.current == getAfter(projectPath(id)).data.milestones[request.resource.data.milestoneKey]
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
   }
   match /{document=**} { allow read,write: if false; }
  }

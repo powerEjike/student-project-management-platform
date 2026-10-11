@@ -15,6 +15,65 @@ before(async () => {
   });
 });
 after(async()=>await env?.cleanup());
+
+async function seedWorkflow(id,steps=[{name:'Proposal',days:14},{name:'Final Submission',days:112}]){
+ await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'students',id),{departmentId:'dept-a',programme:'BSc Biochemistry'});await setDoc(doc(db,'projects',id),{departmentId:'dept-a',studentId:id,supervisorId:'sup',coSupervisorId:'co',title:'',status:'Awaiting topic'});await setDoc(doc(db,'milestoneTemplates','dept-a__BSCBIOCHEMISTRY'),{departmentId:'dept-a',programme:'BSc Biochemistry',steps});});
+}
+async function topicDecision(id,uid='sup',options={}){
+ const {decision='Approved',eventId='topic-1',note='',previousDecision='Awaiting topic',steps=[{name:'Proposal',days:14},{name:'Final Submission',days:112}],actor=uid}=options;
+ const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);
+ const milestones=decision==='Approved'?Object.fromEntries(steps.map((s,i)=>[`m${i}`,{name:s.name,dueDate:'2027-01-31',status:'Not started',note:''}])):{};
+ batch.update(doc(db,'projects',id),{title:'Synthetic research topic',abstract:'A short synthetic abstract.',topicDecision:decision,decisionNote:note,topicApprovedBy:decision==='Approved'?uid:'',topicApprovedAt:decision==='Approved'?serverTimestamp():null,templateId:decision==='Approved'?'dept-a__BSCBIOCHEMISTRY':'',milestonePlan:decision==='Approved'?steps:[],milestones,status:decision==='Approved'?'Research in progress':decision,updatedBy:uid,updatedAt:serverTimestamp(),lastTopicEventId:eventId});
+ batch.set(doc(db,'projects',id,'topicHistory',eventId),{title:'Synthetic research topic',abstract:'A short synthetic abstract.',decision,note,previousDecision,actorId:actor,actorName:actor,createdAt:serverTimestamp()});return batch.commit();
+}
+
+test('only the assigned supervisor decides topics and approval requires the programme template and atomic history',async()=>{
+ const id='workflow-topic';await seedWorkflow(id);
+ for(const uid of ['admin','hod-a','hod-b','co','other','inactive-sup'])await assertFails(topicDecision(id,uid));
+ const db=env.authenticatedContext('sup').firestore();await assertFails(updateDoc(doc(db,'projects',id),{title:'Bypassed approval'}));
+ await assertFails(topicDecision(id,'sup',{actor:'co'}));
+ await assertFails(topicDecision(id,'sup',{steps:[{name:'Wrong stage',days:14}]}));
+ await assertFails(topicDecision(id,'sup',{decision:'Rejected'}));
+ await assertSucceeds(topicDecision(id,'sup',{decision:'Changes requested',note:'Narrow the scope.'}));
+ await assertSucceeds(topicDecision(id,'sup',{eventId:'topic-2',previousDecision:'Changes requested'}));
+ await assertFails(topicDecision(id,'sup',{eventId:'topic-3',previousDecision:'Approved'}));
+ for(const uid of ['hod-a','co'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
+ for(const uid of ['admin','hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
+ await assertFails(updateDoc(doc(db,'projects',id,'topicHistory','topic-2'),{decision:'Rejected'}));
+});
+
+test('ten-stage approval stays atomic and within permission evaluation limits',async()=>{
+ const steps=Array.from({length:10},(_,i)=>({name:`Stage ${i+1}`,days:i*7}));const id='workflow-ten';await seedWorkflow(id,steps);await assertSucceeds(topicDecision(id,'sup',{steps}));
+});
+
+test('progress and deadline changes require the current primary supervisor and immutable matching audit',async()=>{
+ const id='workflow-progress';await seedWorkflow(id);await topicDecision(id);
+ const previous={name:'Proposal',dueDate:'2027-01-31',status:'Not started',note:''};const current={...previous,dueDate:'2027-02-14',status:'Completed',note:'Reviewed and accepted.'};
+ async function progress(uid='sup',options={}){
+  const {eventId='progress-1',actor=uid,name='Proposal',before=previous,changeSecond=false}=options;const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);
+  const value={...current,name};const milestones={m0:value,m1:{name:'Final Submission',dueDate:'2027-01-31',status:changeSecond?'Completed':'Not started',note:''}};
+  batch.update(doc(db,'projects',id),{milestones,lastMilestoneKey:'m0',lastProgressEventId:eventId,updatedBy:uid,updatedAt:serverTimestamp()});batch.set(doc(db,'projects',id,'progressHistory',eventId),{milestoneKey:'m0',previous:before,current:value,actorId:actor,actorName:actor,createdAt:serverTimestamp()});return batch.commit();
+ }
+ for(const uid of ['admin','hod-a','co','other'])await assertFails(progress(uid));
+ await assertFails(progress('sup',{name:'Renamed stage'}));await assertFails(progress('sup',{changeSecond:true}));await assertFails(progress('sup',{before:{...previous,status:'Completed'}}));await assertFails(progress('sup',{actor:'co'}));
+ const db=env.authenticatedContext('sup').firestore();await assertFails(updateDoc(doc(db,'projects',id),{'milestones.m0.status':'Completed'}));await assertSucceeds(progress());
+ await assertFails(deleteDoc(doc(db,'projects',id,'progressHistory','progress-1')));
+ await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{supervisorId:'other',coSupervisorId:''}));
+ await assertFails(progress('sup',{eventId:'progress-2',before:current}));await assertFails(getDoc(doc(db,'projects',id,'progressHistory','progress-1')));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('other').firestore(),'projects',id,'progressHistory','progress-1')));
+});
+
+test('Super Admin alone manages validated programme templates with an atomic immutable history',async()=>{
+ const id='dept-a__MSC';
+ async function save(uid,steps=[{name:'Proposal',days:7}],eventId='template-1'){
+  const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);const value={departmentId:'dept-a',programme:'MSc',programmeKey:'MSC',steps,updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:eventId};batch.set(doc(db,'milestoneTemplates',id),value);batch.set(doc(db,'milestoneTemplates',id,'history',eventId),{...value,actorId:uid,createdAt:serverTimestamp()});return batch.commit();
+ }
+ await assertFails(save('hod-a'));await assertFails(save('sup'));await assertFails(save('admin',[]));await assertFails(save('admin',[{name:'',days:7}]));await assertFails(save('admin',[{name:'Proposal',days:-1}]));await assertSucceeds(save('admin'));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'milestoneTemplates',id)));
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'milestoneTemplates','dept-a__MISSING')));
+ await assertFails(getDoc(doc(env.authenticatedContext('hod-b').firestore(),'milestoneTemplates',id)));
+ const db=env.authenticatedContext('admin').firestore();await assertFails(updateDoc(doc(db,'milestoneTemplates',id),{steps:[{name:'Bypass audit',days:8}]}));await assertFails(deleteDoc(doc(db,'milestoneTemplates',id,'history','template-1')));
+});
 test('rules restrict project reads, including nested submissions',async()=>{
   for(const uid of ['hod-a','sup','co']) for(const path of ['projects/p1','projects/p1/submissions/v1']) await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),path)));
   for(const uid of ['admin','hod-b','other','inactive','unapproved']) for(const path of ['projects/p1','projects/p1/submissions/v1']) await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),path)));
