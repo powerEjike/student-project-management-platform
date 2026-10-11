@@ -10,7 +10,7 @@ import ProjectCompletion from './ProjectCompletion';
 import DefenceList from './DefenceList';
 import TopicStart from './TopicStart';
 import ProjectOverview from './ProjectOverview';
-import {matchesProjectFilter,overdueCount,type ProjectFilter} from './projectOverview';
+import {matchesProjectFilter,overdueCount,type ProjectFilter} from './projectSummary';
 import {todayInLagos} from './workflow';
 type Props={profile:StaffProfile;uid:string};
 const blankStudent={name:'',matricNumber:'',programme:'',level:'',session:'',email:''};
@@ -53,6 +53,7 @@ export default function ProjectsWorkspace({profile,uid}:Props){
   {!loaded?<p className="muted" role="status">Loading your workspace…</p>:!filtered.length?<div className="empty-state"><BookOpen size={32}/><h2>{students.length?'No students match these filters':profile.role==='hod'?'Start with your first student':'No projects assigned yet'}</h2><p>{profile.role==='hod'?'Add a student record, then select it to assign a supervisor.':'Your HOD will assign projects to your workspace.'}</p></div>:<div className="table-wrap"><table className="students-table"><thead><tr>{profile.role==='hod'&&<th><input type="checkbox" aria-label="Select all visible students" checked={!!filtered.length&&filtered.filter(s=>!projectMap.get(s.id)?.completedDate).every(s=>selected.includes(s.id))} onChange={e=>setSelected(e.target.checked?filtered.filter(s=>!projectMap.get(s.id)?.completedDate).map(s=>s.id):[])} disabled={busy}/></th>}<th>Student</th><th>Programme / session</th><th>Supervisor</th><th>Project</th></tr></thead><tbody>{filtered.map(student=>{const project=projectMap.get(student.id);return <tr key={student.id}>{profile.role==='hod'&&<td><input type="checkbox" aria-label={`Select ${student.name}`} checked={selected.includes(student.id)} onChange={e=>setSelected(e.target.checked?[...selected,student.id]:selected.filter(id=>id!==student.id))} disabled={busy||!!project?.completedDate}/></td>}<td><strong>{student.name}</strong><small>{student.matricNumber}</small></td><td>{student.programme}<small>{student.session} · {student.level}</small></td><td>{project?.supervisorName||<span className="unassigned">Unassigned</span>}</td><td>{project?<><span className="muted">{project.completedDate?'Completed':project.defenceCleared?'Ready for defence':project.status}</span>{overdueCount(project,today)>0&&<small>{overdueCount(project,today)} overdue milestone{overdueCount(project,today)===1?'':'s'}</small>}<button className="text-button" onClick={()=>setOpenProject(project.id)}>Open folder<ArrowRight size={15}/></button></>:<span className="muted">Awaiting allocation</span>}</td></tr>;})}</tbody></table></div>}{profile.role==='hod'&&<DefenceList projects={projects} students={students} department={profile.departmentName||'Department'}/>} {profile.role==='hod'&&<ArchiveManager departmentId={profile.departmentId!} uid={uid}/>}</>;
 }
 function ShieldLabel(){return <span className="badge">SEPARATE WORKSPACE</span>;}
+
 
 
 
