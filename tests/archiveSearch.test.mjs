@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {searchHistoricalProjects} from '../src/archiveSearch.ts';
+const entries=[{id:'a',title:'Liver Enzyme Activity',author:'Élodie Student',year:2020,active:true},{id:'b',title:'Maize Enzyme Activity',author:'Other Author',year:2021,active:true},{id:'hidden',title:'Liver Enzyme Activity',author:'Élodie Student',year:2022,active:false}];
+test('historical browsing combines topic author and year tokens without returning withdrawn records',()=>{
+ assert.deepEqual(searchHistoricalProjects(entries,'ÉLODIE, enzyme','2020').map(e=>e.id),['a']);assert.deepEqual(searchHistoricalProjects(entries,'enzyme','').map(e=>e.id),['b','a']);assert.deepEqual(searchHistoricalProjects(entries,'2021','').map(e=>e.id),['b']);assert.deepEqual(searchHistoricalProjects(entries,'','2022'),[]);
+});
+test('historical search rejects punctuation-only queries and unmatched combinations',()=>{assert.deepEqual(searchHistoricalProjects(entries,'!!!',''),[]);assert.deepEqual(searchHistoricalProjects(entries,'liver maize',''),[]);assert.equal(searchHistoricalProjects(entries,'','').length,2);});
