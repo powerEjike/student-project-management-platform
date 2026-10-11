@@ -43,8 +43,8 @@ service cloud.firestore {
     && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
   function defenceChange(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/projects/$(id)/defenceHistory/$(p.lastDefenceEventId)).data;
-   return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['defenceCleared','defenceDate','defenceBy','defenceByName','defenceNote','defenceOverride','lastDefenceEventId','updatedBy','updatedAt'])
-    && p.defenceCleared is bool && p.defenceCleared != resource.data.get('defenceCleared',false)
+   return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['status','defenceCleared','defenceDate','defenceBy','defenceByName','defenceNote','defenceOverride','lastDefenceEventId','updatedBy','updatedAt'])
+    && p.status == (p.defenceCleared ? 'Completed' : 'Research in progress') && p.defenceCleared is bool && p.defenceCleared != resource.data.get('defenceCleared',false)
     && p.defenceBy == request.auth.uid && p.defenceByName == get(self()).data.displayName && p.updatedBy == request.auth.uid && p.updatedAt == request.time
     && p.defenceNote is string && p.defenceNote.size() <= 2000 && p.defenceOverride is string && p.defenceOverride.size() <= 2000
     && ((p.defenceCleared && resource.data.topicDecision == 'Approved' && p.defenceDate == request.time && text(p.defenceOverride,2000)) || (!p.defenceCleared && p.defenceDate == null && p.defenceOverride == '' && text(p.defenceNote,2000)))
