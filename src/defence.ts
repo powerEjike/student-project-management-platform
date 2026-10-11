@@ -1,0 +1,2 @@
+export type DefenceRow={name:string;matricNumber:string;title:string;supervisor:string;programme:string;level:string;session:string;date:string};
+export function filterDefence(rows:DefenceRow[],filters:{session:string;programme:string;supervisor:string;from:string;to:string}){return rows.filter(r=>(!filters.session||r.session===filters.session)&&(!filters.programme||r.programme===filters.programme)&&(!filters.supervisor||r.supervisor===filters.supervisor)&&(!filters.from||r.date>=filters.from)&&(!filters.to||r.date<=filters.to));}

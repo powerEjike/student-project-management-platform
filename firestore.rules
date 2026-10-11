@@ -42,6 +42,14 @@ service cloud.firestore {
     && validMilestone(p.milestones[key]) && p.milestones[key].name == resource.data.milestones[key].name
     && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
+  function defenceChange(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/projects/$(id)/defenceHistory/$(p.lastDefenceEventId)).data;
+   return primary(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['defenceCleared','defenceDate','defenceBy','defenceByName','defenceNote','defenceOverride','lastDefenceEventId','updatedBy','updatedAt'])
+    && p.defenceCleared is bool && p.defenceCleared != resource.data.get('defenceCleared',false)
+    && p.defenceBy == request.auth.uid && p.defenceByName == get(self()).data.displayName && p.updatedBy == request.auth.uid && p.updatedAt == request.time
+    && p.defenceNote is string && p.defenceNote.size() <= 2000 && p.defenceOverride is string && p.defenceOverride.size() <= 2000
+    && ((p.defenceCleared && resource.data.topicDecision == 'Approved' && p.defenceDate == request.time && text(p.defenceOverride,2000)) || (!p.defenceCleared && p.defenceDate == null && p.defenceOverride == '' && text(p.defenceNote,2000)))
+    && text(p.lastDefenceEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
+  }
   function access(p) { return active() && role() != 'admin' && same(p.departmentId) && (role() == 'hod' || p.supervisorId == request.auth.uid || p.get('coSupervisorId','') == request.auth.uid); }
   function hodStudent(id) { return active() && role() == 'hod' && exists(studentPath(id)) && hod(get(studentPath(id)).data.departmentId); }
   function lecturer(id,departmentId) { return exists(staffPath(id)) && get(staffPath(id)).data.active == true && get(staffPath(id)).data.role == 'lecturer' && get(staffPath(id)).data.departmentId == departmentId; }
@@ -158,7 +166,7 @@ service cloud.firestore {
    allow update: if (hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
     && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
-    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id);
+    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id);
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);
@@ -173,6 +181,14 @@ service cloud.firestore {
     allow update,delete: if false;
    }
    match /submissions/{submissionId} { allow read: if access(get(projectPath(id)).data); allow write: if false; }
+   match /defenceHistory/{eventId} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if primary(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['cleared','previousCleared','note','override','actorId','actorName','createdAt'])
+     && getAfter(projectPath(id)).data.lastDefenceEventId == eventId && request.resource.data.cleared == getAfter(projectPath(id)).data.defenceCleared && request.resource.data.previousCleared == get(projectPath(id)).data.get('defenceCleared',false)
+     && request.resource.data.note == getAfter(projectPath(id)).data.defenceNote && request.resource.data.override == getAfter(projectPath(id)).data.defenceOverride
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
    match /topicHistory/{eventId} {
     allow read: if access(get(projectPath(id)).data);
     allow create: if primary(get(projectPath(id)).data) && request.resource.data.keys().hasOnly(['title','abstract','decision','note','previousDecision','actorId','actorName','createdAt'])
