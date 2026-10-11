@@ -153,14 +153,34 @@ service cloud.firestore {
    allow delete: if false;
   }
   match /departmentSettings/{id} {
-   allow get: if active() && (role() == 'admin' || hod(id));
-   allow create,update: if active() && (role() == 'admin' || hod(id))
+   function manager() { return active() && (role() == 'admin' || hod(id)); }
+   function settingsPath() { return /databases/$(database)/documents/departmentSettings/$(id); }
+   function historyPath(event) { return /databases/$(database)/documents/departmentSettings/$(id)/history/$(event); }
+   function previousLimit() { return exists(settingsPath()) ? get(settingsPath()).data.primaryLimit : 0; }
+   allow get: if manager();
+   allow create,update: if manager()
     && exists(/databases/$(database)/documents/departments/$(id))
-    && request.resource.data.keys().hasAll(['primaryLimit','updatedBy','updatedAt'])
-    && request.resource.data.keys().hasOnly(['primaryLimit','updatedBy','updatedAt'])
+    && request.resource.data.keys().hasAll(['primaryLimit','updatedBy','updatedAt','lastEventId'])
+    && request.resource.data.keys().hasOnly(['primaryLimit','updatedBy','updatedAt','lastEventId'])
     && request.resource.data.primaryLimit is int && request.resource.data.primaryLimit >= 0 && request.resource.data.primaryLimit <= 1000
-    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+    && request.resource.data.primaryLimit != previousLimit()
+    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+    && text(request.resource.data.lastEventId,100) && !exists(historyPath(request.resource.data.lastEventId))
+    && getAfter(historyPath(request.resource.data.lastEventId)).data.primaryLimit == request.resource.data.primaryLimit
+    && getAfter(historyPath(request.resource.data.lastEventId)).data.previousLimit == previousLimit();
    allow list,delete: if false;
+   match /history/{event} {
+    allow read: if manager();
+    allow create: if manager()
+     && request.resource.data.keys().hasAll(['previousLimit','primaryLimit','actorId','actorName','createdAt'])
+     && request.resource.data.keys().hasOnly(['previousLimit','primaryLimit','actorId','actorName','createdAt'])
+     && getAfter(settingsPath()).data.lastEventId == event
+     && getAfter(settingsPath()).data.primaryLimit == request.resource.data.primaryLimit
+     && getAfter(settingsPath()).data.updatedAt == request.time && getAfter(settingsPath()).data.updatedBy == request.auth.uid
+     && request.resource.data.previousLimit == previousLimit() && request.resource.data.primaryLimit != previousLimit()
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
   }
   match /archive/{id} {
    allow get: if (active() && role() == 'hod' && !exists(/databases/$(database)/documents/archive/$(id))) || (active() && role() != 'admin' && same(resource.data.departmentId));

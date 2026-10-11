@@ -272,9 +272,19 @@ test('Super Admin roster import preserves existing students and cannot allocate 
 });
 
 test('department allocation settings are scoped to HOD or admin with valid limits and trusted stamps',async()=>{
- const setting=(uid,id='dept-a',overrides={})=>{const db=env.authenticatedContext(uid).firestore();return setDoc(doc(db,'departmentSettings',id),{primaryLimit:10,updatedBy:uid,updatedAt:serverTimestamp(),...overrides});};
+ const setting=async(uid,id='dept-a',overrides={})=>{const db=env.authenticatedContext(uid).firestore();let previousLimit=0;await env.withSecurityRulesDisabled(async c=>{previousLimit=(await getDoc(doc(c.firestore(),'departmentSettings',id))).data()?.primaryLimit||0;});const event=doc(collection(db,'departmentSettings',id,'history'));const batch=writeBatch(db);const data={primaryLimit:10,updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:event.id,...overrides};batch.set(doc(db,'departmentSettings',id),data);batch.set(event,{primaryLimit:data.primaryLimit,previousLimit,actorId:uid,actorName:uid,createdAt:serverTimestamp()});return batch.commit();};
  for(const uid of ['sup','co','other','foreign','inactive','hod-b'])await assertFails(setting(uid));
  await assertFails(setting('hod-a','missing'));for(const primaryLimit of [-1,1001,1.5,'10'])await assertFails(setting('hod-a','dept-a',{primaryLimit}));await assertFails(setting('hod-a','dept-a',{updatedBy:'admin'}));await assertFails(setting('hod-a','dept-a',{extra:true}));
  await assertSucceeds(setting('hod-a'));await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'departmentSettings','dept-a')));for(const uid of ['sup','co','hod-b','inactive'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-a')));
  await assertSucceeds(setting('admin','dept-a',{primaryLimit:20}));await assertSucceeds(setting('hod-a','dept-a',{primaryLimit:0}));await assertFails(deleteDoc(doc(env.authenticatedContext('hod-a').firestore(),'departmentSettings','dept-a')));await assertFails(getDocs(collection(env.authenticatedContext('admin').firestore(),'departmentSettings')));
+});
+
+test('allocation setting changes require immutable atomic history and support legacy settings',async()=>{
+ await env.withSecurityRulesDisabled(async c=>await setDoc(doc(c.firestore(),'departmentSettings','dept-b'),{primaryLimit:5,updatedBy:'admin'}));const db=env.authenticatedContext('hod-b').firestore();
+ const data={primaryLimit:8,updatedBy:'hod-b',updatedAt:serverTimestamp(),lastEventId:'history-1'};
+ await assertFails(setDoc(doc(db,'departmentSettings','dept-b'),data));
+ async function change(overrides={}){const b=writeBatch(db);b.set(doc(db,'departmentSettings','dept-b'),data);b.set(doc(db,'departmentSettings','dept-b','history','history-1'),{previousLimit:5,primaryLimit:8,actorId:'hod-b',actorName:'hod-b',createdAt:serverTimestamp(),...overrides});return b.commit();}
+ await assertFails(change({previousLimit:0}));await assertFails(change({actorName:'Other person'}));await assertFails(change({actorId:'admin'}));await assertSucceeds(change());
+ for(const uid of ['admin','hod-b'])await assertSucceeds(getDocs(collection(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-b','history')));for(const uid of ['hod-a','sup','foreign','inactive'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-b','history','history-1')));
+ await assertFails(updateDoc(doc(db,'departmentSettings','dept-b','history','history-1'),{previousLimit:1}));await assertFails(deleteDoc(doc(db,'departmentSettings','dept-b','history','history-1')));await assertFails(change());
 });
