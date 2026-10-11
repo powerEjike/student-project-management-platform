@@ -78,7 +78,7 @@ test('only the assigned supervisor decides topics and approval requires the prog
  await assertSucceeds(topicDecision(id,'sup',{eventId:'topic-2',previousDecision:'Changes requested'}));
  await assertFails(topicDecision(id,'sup',{eventId:'topic-3',previousDecision:'Approved'}));
  for(const uid of ['hod-a','co'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
- for(const uid of ['hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
+ for(const uid of ['admin','hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'topicHistory','topic-2')));
  await assertFails(updateDoc(doc(db,'projects',id,'topicHistory','topic-2'),{decision:'Rejected'}));
 });
 
@@ -175,7 +175,8 @@ test('allocation requires a valid lecturer, matching department and an atomic re
   await assertFails(setDoc(doc(db,'projects',id),{departmentId:'dept-a',studentId:id,supervisorId:'sup'}));
   await assertSucceeds(assignment(db,id));
   for(const uid of ['hod-a','sup','co'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
-  for(const uid of ['admin','hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
+  for(const uid of ['hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('admin').firestore(),'students',id)));
   await assertFails(updateDoc(doc(db,'projects',id,'allocations','event-1'),{reason:'Changed history'}));
   await assertFails(deleteDoc(doc(db,'projects',id,'allocations','event-1')));
 });
