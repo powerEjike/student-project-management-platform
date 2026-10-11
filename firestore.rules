@@ -94,9 +94,9 @@ service cloud.firestore {
    allow get: if (active() && role() == 'hod' && !exists(/databases/$(database)/documents/archive/$(id))) || (active() && role() != 'admin' && same(resource.data.departmentId));
    allow list: if active() && role() != 'admin' && same(resource.data.departmentId);
    allow create: if hod(request.resource.data.departmentId) && id.matches('[a-f0-9]{64}')
-    && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','supervisor','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId'])
+    && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId'])
     && text(request.resource.data.title,300) && request.resource.data.titleKey.matches('[\\p{L}\\p{N} ]+') && !request.resource.data.titleKey.matches('.*\\p{Lu}.*') && titleKey(request.resource.data.title).matches('(?i)' + request.resource.data.titleKey) && text(request.resource.data.titleKey,300)
-    && text(request.resource.data.author,120) && text(request.resource.data.supervisor,120) && text(request.resource.data.programme,80)
+    && text(request.resource.data.author,120) && text(request.resource.data.programme,80)
     && request.resource.data.year is int && request.resource.data.year >= 1900 && request.resource.data.year <= 2100 && request.resource.data.active == true
     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && archiveAudit(id);
@@ -107,7 +107,7 @@ service cloud.firestore {
    match /history/{eventId} {
     allow read: if hod(get(/databases/$(database)/documents/archive/$(id)).data.departmentId);
     allow create: if hod(getAfter(/databases/$(database)/documents/archive/$(id)).data.departmentId)
-     && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','supervisor','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId','actorId','recordedAt','reason'])
+     && request.resource.data.keys().hasOnly(['departmentId','title','titleKey','author','year','programme','active','createdBy','createdAt','updatedBy','updatedAt','lastEventId','actorId','recordedAt','reason'])
      && request.resource.data.diff(getAfter(/databases/$(database)/documents/archive/$(id)).data).affectedKeys().hasOnly(['actorId','recordedAt','reason'])
      && request.resource.data.lastEventId == eventId && request.resource.data.actorId == request.auth.uid && request.resource.data.recordedAt == request.time && text(request.resource.data.reason,500);
     allow update,delete: if false;
@@ -192,3 +192,4 @@ service cloud.firestore {
   match /{document=**} { allow read,write: if false; }
  }
 }
+

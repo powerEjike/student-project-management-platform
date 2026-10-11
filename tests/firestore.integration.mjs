@@ -19,7 +19,7 @@ after(async()=>await env?.cleanup());
 
 test('archive creation and withdrawal are HOD-only, scoped, atomic and preserve original details',async()=>{
  const id='a'.repeat(64);const db=env.authenticatedContext('hod-a').firestore();
- const details={departmentId:'dept-a',title:'  ENZYME:  Activity In Maize! ',titleKey:'enzyme activity in maize',author:'Synthetic author',year:2024,supervisor:'Historical supervisor',programme:'BSc Biochemistry',active:true};
+ const details={departmentId:'dept-a',title:'  ENZYME:  Activity In Maize! ',titleKey:'enzyme activity in maize',author:'Synthetic author',year:2024,programme:'BSc Biochemistry',active:true};
  async function create(uid='hod-a',overrides={}){const userdb=env.authenticatedContext(uid).firestore();const batch=writeBatch(userdb);const data={...details,...overrides,createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:'archive-1'};batch.set(doc(userdb,'archive',id),data);batch.set(doc(userdb,'archive',id,'history','archive-1'),{...data,actorId:uid,recordedAt:serverTimestamp(),reason:'Historical entry'});return batch.commit();}
  for(const uid of ['admin','sup','co','hod-b','inactive'])await assertFails(create(uid));
  await assertFails(create('hod-a',{titleKey:'wrong key'}));await assertFails(setDoc(doc(db,'archive',id),details));await assertSucceeds(create());
@@ -208,3 +208,4 @@ test('Super Admin changes staff access atomically, cannot lock out self and keep
   await assertFails(updateDoc(doc(db,'staffAccessChanges','access-1'),{active:true}));
   await assertFails(deleteDoc(doc(db,'staffAccessChanges','access-1')));
 });
+
