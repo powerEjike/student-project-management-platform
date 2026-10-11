@@ -35,6 +35,15 @@ export function watchProjects(profile:StaffProfile,uid:string,receive:(data:Proj
   return()=>{a();b();};
 }
 export async function readStudent(id:string){const s=await getDoc(doc(db,'students',id));return s.exists()?{id:s.id,...s.data()} as Student:null;}
+export async function registerSupervisorProject(input:{title:string;name:string;matricNumber:string;session:string},profile:StaffProfile,uid:string){
+ if(profile.role!=='lecturer'||!profile.departmentId)throw Error('An active departmental supervisor is required.');
+ if(!input.name.trim()||!canonical(input.matricNumber)||!canonical(input.session))throw Error('Enter the student name, registration number and academic session.');
+ const id=studentIdFor(profile.departmentId,input.session,input.matricNumber);const studentRef=doc(db,'students',id);const projectRef=doc(db,'projects',id);const eventRef=doc(collection(projectRef,'allocations'));
+ await runTransaction(db,async tx=>{if((await tx.get(studentRef)).exists())throw Error('This registration number already exists for that session. Ask the HOD to check its allocation.');
+ tx.set(studentRef,{departmentId:profile.departmentId,name:input.name.trim(),matricNumber:input.matricNumber.trim(),matricKey:canonical(input.matricNumber),programme:'BSc Biochemistry',level:'Final year',session:input.session.trim(),email:'',createdBy:uid,createdAt:serverTimestamp()});
+ tx.set(projectRef,{departmentId:profile.departmentId,studentId:id,supervisorId:uid,coSupervisorId:'',supervisorName:profile.displayName,coSupervisorName:'',title:input.title.trim(),status:'Awaiting topic',createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastAllocationEventId:eventRef.id});
+ tx.set(eventRef,{departmentId:profile.departmentId,studentId:id,supervisorId:uid,coSupervisorId:'',previousSupervisorId:'',previousCoSupervisorId:'',reason:'Supervisor registered student after an archive title check',actorId:uid,createdAt:serverTimestamp()});});
+}
 export async function addStudent(data:Omit<Student,'id'|'matricKey'>,uid:string){
   const id=studentIdFor(data.departmentId,data.session,data.matricNumber);
   const value={...data,name:data.name.trim(),matricNumber:data.matricNumber.trim(),programme:data.programme.trim(),level:data.level.trim(),session:data.session.trim(),email:data.email.trim(),matricKey:canonical(data.matricNumber),createdBy:uid,createdAt:serverTimestamp()};

@@ -15,6 +15,14 @@ before(async () => {
   });
 });
 after(async()=>await env?.cleanup());
+test('supervisor registration is atomic, departmental, self-assigned and cannot capture existing students',async()=>{
+ const id='dept-a__20262027__NEW001';
+ function registration(uid='sup',departmentId='dept-a',supervisorId=uid,includeStudent=true,includeAudit=true){const db=env.authenticatedContext(uid).firestore();const b=writeBatch(db);if(includeStudent)b.set(doc(db,'students',id),{departmentId,name:'Synthetic new student',matricNumber:'NEW001',matricKey:'NEW001',programme:'BSc Biochemistry',level:'Final year',session:'2026/2027',email:'',createdBy:uid,createdAt:serverTimestamp()});b.set(doc(db,'projects',id),{departmentId,studentId:id,supervisorId,coSupervisorId:'',supervisorName:supervisorId,coSupervisorName:'',title:'New synthetic title',status:'Awaiting topic',createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastAllocationEventId:'first'});if(includeAudit)b.set(doc(db,'projects',id,'allocations','first'),{departmentId,studentId:id,supervisorId,coSupervisorId:'',previousSupervisorId:'',previousCoSupervisorId:'',reason:'Supervisor registration after archive check',actorId:uid,createdAt:serverTimestamp()});return b.commit();}
+ for(const uid of ['admin','inactive-sup','foreign','hod-a'])await assertFails(registration(uid));
+ await assertFails(registration('sup','dept-b'));await assertFails(registration('sup','dept-a','other'));await assertFails(registration('sup','dept-a','sup',false));await assertFails(registration('sup','dept-a','sup',true,false));
+ await assertSucceeds(registration());await assertFails(registration('other'));await assertFails(registration());
+ await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'students',id)));await assertSucceeds(getDoc(doc(env.authenticatedContext('hod-a').firestore(),'students',id)));for(const uid of ['other','foreign','admin'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'students',id)));
+});
 
 
 test('archive creation and withdrawal are HOD-only, scoped, atomic and preserve original details',async()=>{

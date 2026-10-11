@@ -134,10 +134,11 @@ service cloud.firestore {
     allow update,delete: if false;
    }
   }
+  function lecturerNew(id) { let p=getAfter(projectPath(id)).data; let s=getAfter(studentPath(id)).data; return !exists(projectPath(id)) && primary(p) && s.departmentId == get(self()).data.departmentId && s.departmentId == p.departmentId && s.createdBy == request.auth.uid && s.createdAt == request.time && p.coSupervisorId == '' && p.createdBy == request.auth.uid && p.createdAt == request.time; }
   match /students/{id} {
-   allow get: if (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
+   allow get: if (active() && role() == 'lecturer' && !exists(studentPath(id))) || (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
    allow list: if hod(resource.data.departmentId);
-   allow create: if hod(request.resource.data.departmentId) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+   allow create: if (hod(request.resource.data.departmentId) || lecturerNew(id)) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
     && request.resource.data.keys().hasOnly(['departmentId','name','matricNumber','matricKey','programme','level','session','email','createdBy','createdAt'])
     && text(request.resource.data.name,120) && text(request.resource.data.matricNumber,80) && text(request.resource.data.programme,80) && text(request.resource.data.level,80) && text(request.resource.data.session,80)
     && request.resource.data.email is string && request.resource.data.email.size() <= 254
@@ -150,9 +151,9 @@ service cloud.firestore {
   match /projects/{id} {
    allow get: if hodStudent(id) || access(resource.data);
    allow list: if access(resource.data);
-   allow create: if hod(request.resource.data.departmentId) && hodStudent(id) && request.resource.data.studentId == id
+   allow create: if ((hod(request.resource.data.departmentId) && hodStudent(id)) || lecturerNew(id)) && request.resource.data.studentId == id
     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
-    && request.resource.data.title == '' && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+    && (request.resource.data.title == '' || (lecturerNew(id) && text(request.resource.data.title,300))) && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && allocation(request.resource.data) && event(id,request.resource.data);
    allow update: if (hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
@@ -161,7 +162,7 @@ service cloud.firestore {
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);
-    allow create: if hodStudent(id)
+    allow create: if (hodStudent(id) || lecturerNew(id))
      && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','previousSupervisorId','previousCoSupervisorId','reason','actorId','createdAt'])
      && request.resource.data.departmentId == getAfter(projectPath(id)).data.departmentId && request.resource.data.studentId == id
      && request.resource.data.supervisorId == getAfter(projectPath(id)).data.supervisorId && request.resource.data.coSupervisorId == getAfter(projectPath(id)).data.coSupervisorId
