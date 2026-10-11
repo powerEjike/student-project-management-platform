@@ -16,6 +16,23 @@ before(async () => {
 });
 after(async()=>await env?.cleanup());
 
+test('archive creation and withdrawal are HOD-only, scoped, atomic and preserve original details',async()=>{
+ const id='a'.repeat(64);const db=env.authenticatedContext('hod-a').firestore();
+ const details={departmentId:'dept-a',title:'  ENZYME:  Activity In Maize! ',titleKey:'enzyme activity in maize',author:'Synthetic author',year:2024,supervisor:'Historical supervisor',programme:'BSc Biochemistry',active:true};
+ async function create(uid='hod-a',overrides={}){const userdb=env.authenticatedContext(uid).firestore();const batch=writeBatch(userdb);const data={...details,...overrides,createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:'archive-1'};batch.set(doc(userdb,'archive',id),data);batch.set(doc(userdb,'archive',id,'history','archive-1'),{...data,actorId:uid,recordedAt:serverTimestamp(),reason:'Historical entry'});return batch.commit();}
+ for(const uid of ['admin','sup','co','hod-b','inactive'])await assertFails(create(uid));
+ await assertFails(create('hod-a',{titleKey:'wrong key'}));await assertFails(setDoc(doc(db,'archive',id),details));await assertSucceeds(create());
+ for(const uid of ['sup','co','hod-a'])await assertSucceeds(getDocs(query(collection(env.authenticatedContext(uid).firestore(),'archive'),where('departmentId','==','dept-a'),where('titleKey','==','enzyme activity in maize'),where('active','==',true))));
+ for(const uid of ['admin','hod-b','foreign'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'archive',id)));
+ await assertFails(getDocs(collection(env.authenticatedContext('sup').firestore(),'archive')));
+ await assertFails(updateDoc(doc(db,'archive',id),{active:false}));await assertFails(updateDoc(doc(db,'archive',id),{author:'Rewritten author'}));
+ const before=(await getDoc(doc(db,'archive',id))).data();const data={...before,active:false,updatedBy:'hod-a',updatedAt:serverTimestamp(),lastEventId:'archive-2'};const batch=writeBatch(db);batch.update(doc(db,'archive',id),{active:false,updatedBy:'hod-a',updatedAt:serverTimestamp(),lastEventId:'archive-2'});batch.set(doc(db,'archive',id,'history','archive-2'),{...data,actorId:'hod-a',recordedAt:serverTimestamp(),reason:'Incorrect historical entry withdrawn'});await assertSucceeds(batch.commit());
+ await assertFails(deleteDoc(doc(db,'archive',id)));await assertFails(updateDoc(doc(db,'archive',id,'history','archive-1'),{reason:'Changed history'}));
+ await assertFails(getDoc(doc(env.authenticatedContext('sup').firestore(),'archive',id,'history','archive-1')));
+ const matches=await getDocs(query(collection(db,'archive'),where('departmentId','==','dept-a'),where('titleKey','==','enzyme activity in maize'),where('active','==',true)));if(!matches.empty)throw new Error('Withdrawn archive entries should not match.');
+ const unicode='b'.repeat(64);const unicodeData={...details,title:'Étude du résumé!',titleKey:'étude du résumé',createdBy:'hod-a',createdAt:serverTimestamp(),updatedBy:'hod-a',updatedAt:serverTimestamp(),lastEventId:'unicode-1'};const unicodeBatch=writeBatch(db);unicodeBatch.set(doc(db,'archive',unicode),unicodeData);unicodeBatch.set(doc(db,'archive',unicode,'history','unicode-1'),{...unicodeData,actorId:'hod-a',recordedAt:serverTimestamp(),reason:'Historical entry'});await assertSucceeds(unicodeBatch.commit());
+});
+
 async function seedWorkflow(id,steps=[{name:'Proposal',days:14},{name:'Final Submission',days:112}]){
  await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'students',id),{departmentId:'dept-a',programme:'BSc Biochemistry'});await setDoc(doc(db,'projects',id),{departmentId:'dept-a',studentId:id,supervisorId:'sup',coSupervisorId:'co',title:'',status:'Awaiting topic'});await setDoc(doc(db,'milestoneTemplates','dept-a__BSCBIOCHEMISTRY'),{departmentId:'dept-a',programme:'BSc Biochemistry',steps});});
 }
