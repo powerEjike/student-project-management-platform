@@ -91,7 +91,8 @@ service cloud.firestore {
    function visible(r) { return hod(r.departmentId) || (same(r.departmentId) && role() == 'lecturer' && r.supervisorId == request.auth.uid); }
    function audit(r) { let h=getAfter(/databases/$(database)/documents/releaseRequests/$(rid)/history/$(r.lastEventId)).data; return text(r.lastEventId,128) && r.updatedBy == request.auth.uid && r.updatedAt == request.time && h.state == r.state && h.actorId == request.auth.uid && h.createdAt == request.time; }
    allow read: if visible(resource.data);
-   allow create: if request.resource.data.keys().hasOnly(['projectId','departmentId','supervisorId','reason','note','state','decisionNote','activity','createdAt','updatedAt','updatedBy','lastEventId'])
+   allow create: if request.resource.data.keys().hasOnly(['studentName','projectId','departmentId','supervisorId','reason','note','state','decisionNote','activity','createdAt','updatedAt','updatedBy','lastEventId'])
+    && request.resource.data.studentName == get(studentPath(request.resource.data.projectId)).data.get('name','')
     && primary(get(projectPath(request.resource.data.projectId)).data) && request.resource.data.supervisorId == request.auth.uid && request.resource.data.departmentId == get(projectPath(request.resource.data.projectId)).data.departmentId
     && request.resource.data.reason in ['Non-responsive','Not serious about the work','Other'] && text(request.resource.data.note,2000) && request.resource.data.state == 'Pending' && request.resource.data.decisionNote == '' && request.resource.data.createdAt == request.time
     && request.resource.data.activity == {'milestones':get(projectPath(request.resource.data.projectId)).data.get('milestones',{}),'lastProjectUpdate':get(projectPath(request.resource.data.projectId)).data.get('updatedAt',null),'contactEvidence':'Not recorded','uploadEvidence':'Uploads disabled'}
