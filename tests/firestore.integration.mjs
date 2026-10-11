@@ -288,3 +288,11 @@ test('allocation setting changes require immutable atomic history and support le
  for(const uid of ['admin','hod-b'])await assertSucceeds(getDocs(collection(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-b','history')));for(const uid of ['hod-a','sup','foreign','inactive'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'departmentSettings','dept-b','history','history-1')));
  await assertFails(updateDoc(doc(db,'departmentSettings','dept-b','history','history-1'),{previousLimit:1}));await assertFails(deleteDoc(doc(db,'departmentSettings','dept-b','history','history-1')));await assertFails(change());
 });
+
+test('agreed actions are optional private immutable contact evidence and require successful contact',async()=>{
+ const id='contact-actions';await seedWorkflow(id);const db=env.authenticatedContext('sup').firestore();
+ async function record(agreedActions,outcome='Contacted'){const b=writeBatch(db);const input={date:'2020-01-01',channel:'Meeting',outcome,note:'Synthetic meeting summary',agreedActions};b.set(doc(db,'projects',id,'contacts','actions-1'),{...input,actorId:'sup',actorName:'sup',createdAt:serverTimestamp()});b.set(doc(db,'projects',id,'contactSummary','current'),{...nextContactSummary(emptyContacts,input),lastEventId:'actions-1',updatedBy:'sup',updatedAt:serverTimestamp()});return b.commit();}
+ await assertFails(record('Agreed task','No response'));await assertFails(record('Agreed task','Cancelled'));await assertFails(record('a'.repeat(2001)));await assertFails(record(42));await assertSucceeds(record('Student: revise methods\nSupervisor: review draft'));
+ for(const uid of ['sup','hod-a'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'contacts','actions-1')));for(const uid of ['admin','co','hod-b','other'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'contacts','actions-1')));
+ await assertFails(updateDoc(doc(db,'projects',id,'contacts','actions-1'),{agreedActions:'Changed tasks'}));
+});
