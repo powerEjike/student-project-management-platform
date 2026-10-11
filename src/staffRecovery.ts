@@ -1,0 +1,1 @@
+export function staleStaffModule(error:unknown){const message=(error as {message?:string})?.message||'';return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message);}
