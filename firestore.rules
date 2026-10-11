@@ -15,7 +15,8 @@ service cloud.firestore {
   function step(steps,i) { return steps.size() <= i || (steps[i].keys().hasOnly(['name','days']) && text(steps[i].name,100) && steps[i].days is int && steps[i].days >= 0 && steps[i].days <= 730); }
   function validSteps(steps) { return steps is list && steps.size() >= 1 && steps.size() <= 10 && step(steps,0) && step(steps,1) && step(steps,2) && step(steps,3) && step(steps,4) && step(steps,5) && step(steps,6) && step(steps,7) && step(steps,8) && step(steps,9); }
   function validMilestone(m) { return m.keys().hasOnly(['name','dueDate','status','note']) && text(m.name,100) && m.dueDate is string && m.dueDate.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])') && m.status in ['Not started','In progress','Under review','Completed','Delayed'] && m.note is string && m.note.size() <= 2000; }
-  function initialStep(p,i) { return p.milestonePlan.size() <= i || (validMilestone(p.milestones['m'+string(i)]) && p.milestones['m'+string(i)].name == p.milestonePlan[i].name && p.milestones['m'+string(i)].status == 'Not started' && p.milestones['m'+string(i)].note == ''); }
+  function initialValue(m,name) { return m.keys().hasOnly(['name','dueDate','status','note']) && m.name == name && m.status == 'Not started' && m.note == '' && m.dueDate is string && m.dueDate.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'); }
+  function initialStep(p,i) { return p.milestonePlan.size() <= i || initialValue(p.milestones['m'+string(i)],p.milestonePlan[i].name); }
   function initialMilestones(p) { return p.milestones is map && p.milestones.size() == p.milestonePlan.size() && initialStep(p,0) && initialStep(p,1) && initialStep(p,2) && initialStep(p,3) && initialStep(p,4) && initialStep(p,5) && initialStep(p,6) && initialStep(p,7) && initialStep(p,8) && initialStep(p,9); }
   function topicChange(id) {
    let p=request.resource.data;
