@@ -13,7 +13,8 @@ export async function progressWorkbook(rows:(string|number)[][],department:strin
  sheet.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'4:4'};
  return new Uint8Array(await book.xlsx.writeBuffer());
 }
-export async function exportProgress(rows:(string|number)[][],department:string,filters:Record<string,string>){
- const bytes=await progressWorkbook(rows,department,filters);const url=URL.createObjectURL(new Blob([bytes as BlobPart],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
- const link=document.createElement('a');link.href=url;link.download='ProjectTrack-student-progress.xlsx';link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+export async function exportProgress(rows:(string|number)[][],department:string,filters:Record<string,string>,kind:'xlsx'|'pdf'='xlsx'){
+ let bytes:Uint8Array;if(kind==='pdf'){const {progressPdf}=await import('./progressPdf');const response=await fetch('/fonts/NotoSans-Regular.ttf');if(!response.ok)throw Error('Could not load report font.');bytes=await progressPdf(rows,department,filters,new Uint8Array(await response.arrayBuffer()));}else bytes=await progressWorkbook(rows,department,filters);
+ const url=URL.createObjectURL(new Blob([bytes as BlobPart],{type:kind==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+ const link=document.createElement('a');link.href=url;link.download=`ProjectTrack-student-progress.${kind}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
