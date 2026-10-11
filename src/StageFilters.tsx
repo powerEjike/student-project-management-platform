@@ -1,0 +1,4 @@
+import {milestoneStatuses} from './workflow';
+export default function StageFilters({levels,stages,level,stage,status,onChange}:{levels:string[];stages:string[];level:string;stage:string;status:string;onChange:(field:'level'|'stage'|'status',value:string)=>void}){
+ return <div className="filters"><select aria-label="Filter by level" value={level} onChange={e=>onChange('level',e.target.value)}><option value="">All levels</option>{levels.map(l=><option key={l}>{l}</option>)}</select><select aria-label="Filter by milestone" value={stage} onChange={e=>onChange('stage',e.target.value)}><option value="">All milestones</option>{stages.map(s=><option key={s}>{s}</option>)}</select><select aria-label="Filter by milestone status" value={status} onChange={e=>onChange('status',e.target.value)}><option value="">All milestone statuses</option>{[...milestoneStatuses,'Overdue'].map(s=><option key={s}>{s}</option>)}</select></div>;
+}
