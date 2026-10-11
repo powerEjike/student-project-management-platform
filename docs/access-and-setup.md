@@ -99,3 +99,12 @@ The HOD or assigned primary supervisor can mark a cleared project completed afte
 Completed projects leave the upcoming defence list and retain their records. Progress, clearance and allocation changes are locked after completion. The HOD can still withdraw the archive entry with a recorded reason under the existing archive workflow. No final files are archived because uploads remain disabled.
 Validation: fourteen local checks and nineteen actual Firestore permission tests passed run38130542232, including HOD and supervisor success, missing atomic records, missing archive permission confirmation, wrong author, invalid/future dates, duplicate completion and immutable audit denial. Synthetic UI verified required confirmation, completed-state feedback and removal from the upcoming list. No real project was marked completed during testing.
 
+
+## Supervisor release workflow
+Primary supervisors can request release with a reason and explanatory note. Pending requests retain the existing allocation and project access. A saved evidence snapshot contains the project's milestones and last recorded project update; meeting/contact evidence is explicitly unavailable and uploads remain disabled. Overdue work is not proof of student non-response.
+
+The departmental HOD can decline, reassign to another active departmental lecturer, or withhold the project. Withheld projects cannot receive topic, progress, defence, completion or ordinary allocation changes. Reinstatement requires a reason and a supervisor. Reassignment/reinstatement retain the folder and prior history, clear the co-supervisor allocation, and record an immutable allocation event. Completion is blocked while release is pending.
+
+Release reasons, evidence and decision history are restricted to the requesting supervisor and departmental HOD. The original supervisor can see their decision through My release requests after reassignment. New supervisors/co-supervisors receive ordinary project history but cannot read private release records; allocation events use a generic explanation. The HOD informs the student under the institution's procedure; the app sends no student notification.
+
+Validation: 16 application tests and 21 Firestore emulator tests passed on GitHub Actions run 38132901343, including all decision outcomes, atomic history/evidence checks, withheld restrictions, cross-department/inactive-role denials and former-supervisor access. Synthetic browser checks covered withholding, reinstatement and reassignment. Production billing remains disabled.
