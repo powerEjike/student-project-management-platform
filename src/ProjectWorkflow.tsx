@@ -5,7 +5,7 @@ import {milestoneStatuses,overdue,todayInLagos,type Milestone} from './workflow'
 import ArchiveCheck from './ArchiveCheck';
 import {titleKey} from './archive';
 export default function ProjectWorkflow({project,student,profile,uid}:{project:Project;student:Student;profile:StaffProfile;uid:string}){
- const primary=!project.completedDate&&profile.role==='lecturer'&&project.supervisorId===uid;
+ const primary=!project.completedDate&&project.releaseState!=='Withheld'&&profile.role==='lecturer'&&project.supervisorId===uid;
  const [archiveChecked,setArchiveChecked]=useState<string|null>(null);
  const [title,setTitle]=useState(project.title);const [abstract,setAbstract]=useState(project.abstract||'');const [decision,setDecision]=useState('Approved');const [note,setNote]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [message,setMessage]=useState('');const [topics,setTopics]=useState<any[]>([]);const [progress,setProgress]=useState<any[]>([]);const [today,setToday]=useState(todayInLagos());
  useEffect(()=>{const timer=setInterval(()=>setToday(todayInLagos()),60000);return()=>clearInterval(timer);},[]);

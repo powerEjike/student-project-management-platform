@@ -53,6 +53,7 @@ export async function allocateStudent(student:Student,supervisorId:string,coSupe
   if(supervisorId===coSupervisorId)throw new Error('Choose a different co-supervisor.');
   await runTransaction(db,async tx=>{
     const ref=doc(db,'projects',student.id);const existing=await tx.get(ref);const before=existing.exists()?existing.data():null;
+    if(before&&['Pending','Withheld'].includes(before.releaseState))throw Error('Decide the release request before changing allocation.');
     if(before&&before.supervisorId===supervisorId&&before.coSupervisorId===coSupervisorId)throw new Error('This student already has that allocation.');
     if(!reason.trim())throw new Error('Enter a reason for this allocation.');
     const supervisor=await tx.get(doc(db,'staff',supervisorId));
