@@ -1,0 +1,4 @@
+export type StaffProfile = {role:'admin'|'hod'|'lecturer';active:boolean;displayName:string;departmentId?:string;departmentName?:string};
+export type Student = {id:string;departmentId:string;name:string;matricNumber:string;matricKey:string;programme:string;level:string;session:string;email:string};
+export type Project = {id:string;departmentId:string;studentId:string;supervisorId:string;coSupervisorId:string;supervisorName:string;coSupervisorName:string;title:string;status:string;lastAllocationEventId:string};
+export type Lecturer = {id:string;displayName:string};

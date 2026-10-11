@@ -1,39 +1,103 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function staffPath() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
-    function activeStaff() {
-      return signedIn() && exists(staffPath()) && get(staffPath()).data.active == true
-        && get(staffPath()).data.role in ['admin', 'hod', 'lecturer'];
-    }
-    function role() { return get(staffPath()).data.role; }
-    function sameDepartment(departmentId) {
-      return activeStaff() && get(staffPath()).data.departmentId == departmentId;
-    }
-    function projectAccess(project) {
-      return activeStaff() && role() != 'admin' && sameDepartment(project.departmentId)
-        && (role() == 'hod' || project.supervisorId == request.auth.uid
-          || project.get('coSupervisorId', '') == request.auth.uid);
-    }
-    match /staff/{uid} {
-      allow get: if signedIn() && request.auth.uid == uid;
-      allow list: if activeStaff() && role() == 'admin';
-      // All access changes use trusted server tooling, never the browser.
-      allow write: if false;
-    }
-    match /departments/{departmentId} {
-      allow read: if activeStaff() && (role() == 'admin' || sameDepartment(departmentId));
-      allow write: if false;
-    }
-    match /projects/{projectId} {
-      allow read: if projectAccess(resource.data);
-      allow write: if false;
-      match /{nested=**} {
-        allow read: if projectAccess(get(/databases/$(database)/documents/projects/$(projectId)).data);
-        allow write: if false;
-      }
-    }
-    match /{document=**} { allow read, write: if false; }
+ match /databases/{database}/documents {
+  function signedIn() { return request.auth != null; }
+  function self() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+  function active() { return signedIn() && exists(self()) && get(self()).data.active == true && get(self()).data.role in ['admin','hod','lecturer']; }
+  function role() { return get(self()).data.role; }
+  function same(id) { return active() && get(self()).data.departmentId == id; }
+  function hod(id) { return same(id) && role() == 'hod'; }
+  function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.matches('.*[^ ].*'); }
+  function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
+  function studentPath(id) { return /databases/$(database)/documents/students/$(id); }
+  function staffPath(id) { return /databases/$(database)/documents/staff/$(id); }
+  function access(p) { return active() && role() != 'admin' && same(p.departmentId) && (role() == 'hod' || p.supervisorId == request.auth.uid || p.get('coSupervisorId','') == request.auth.uid); }
+  function hodStudent(id) { return active() && role() == 'hod' && exists(studentPath(id)) && hod(get(studentPath(id)).data.departmentId); }
+  function lecturer(id,departmentId) { return exists(staffPath(id)) && get(staffPath(id)).data.active == true && get(staffPath(id)).data.role == 'lecturer' && get(staffPath(id)).data.departmentId == departmentId; }
+  function allocation(p) {
+   return p.supervisorId is string && p.coSupervisorId is string && p.supervisorId != p.coSupervisorId
+    && lecturer(p.supervisorId,p.departmentId) && p.supervisorName == get(staffPath(p.supervisorId)).data.displayName
+    && ((p.coSupervisorId == '' && p.coSupervisorName == '') || (lecturer(p.coSupervisorId,p.departmentId) && p.coSupervisorName == get(staffPath(p.coSupervisorId)).data.displayName))
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && text(p.lastAllocationEventId,128);
   }
+  function event(id,p) {
+   let e = getAfter(/databases/$(database)/documents/projects/$(id)/allocations/$(p.lastAllocationEventId)).data;
+   return e.actorId == request.auth.uid && e.createdAt == request.time && e.supervisorId == p.supervisorId && e.coSupervisorId == p.coSupervisorId;
+  }
+  match /staff/{uid} {
+   allow get: if (signedIn() && request.auth.uid == uid) || (active() && role() == 'admin') || (active() && role() == 'hod' && same(resource.data.departmentId) && resource.data.role == 'lecturer' && resource.data.active == true);
+   allow list: if active() && (role() == 'admin' || (role() == 'hod' && same(resource.data.departmentId) && resource.data.role == 'lecturer' && resource.data.active == true));
+   allow create,delete: if false;
+   allow update: if active() && role() == 'admin' && uid != request.auth.uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','active','departmentId','departmentName','updatedAt','lastAccessEventId'])
+    && text(request.resource.data.lastAccessEventId,128)
+    && getAfter(/databases/$(database)/documents/staffAccessChanges/$(request.resource.data.lastAccessEventId)).data.staffId == uid
+    && getAfter(/databases/$(database)/documents/staffAccessChanges/$(request.resource.data.lastAccessEventId)).data.actorId == request.auth.uid
+    && getAfter(/databases/$(database)/documents/staffAccessChanges/$(request.resource.data.lastAccessEventId)).data.createdAt == request.time
+    && request.resource.data.role in ['admin','hod','lecturer'] && request.resource.data.active is bool && request.resource.data.updatedAt == request.time
+    && ((request.resource.data.role == 'admin' && request.resource.data.departmentId == '' && request.resource.data.departmentName == '')
+       || (request.resource.data.role != 'admin' && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+        && request.resource.data.departmentName == get(/databases/$(database)/documents/departments/$(request.resource.data.departmentId)).data.name));
+  }
+  match /staffAccessChanges/{eventId} {
+   allow read: if active() && role() == 'admin';
+   allow create: if active() && role() == 'admin' && request.resource.data.staffId != request.auth.uid
+    && request.resource.data.keys().hasOnly(['staffId','role','active','departmentId','previousRole','previousActive','previousDepartmentId','actorId','createdAt'])
+    && getAfter(staffPath(request.resource.data.staffId)).data.lastAccessEventId == eventId
+    && request.resource.data.role == getAfter(staffPath(request.resource.data.staffId)).data.role
+    && request.resource.data.active == getAfter(staffPath(request.resource.data.staffId)).data.active
+    && request.resource.data.departmentId == getAfter(staffPath(request.resource.data.staffId)).data.departmentId
+    && request.resource.data.previousRole == get(staffPath(request.resource.data.staffId)).data.role
+    && request.resource.data.previousActive == get(staffPath(request.resource.data.staffId)).data.active
+    && request.resource.data.previousDepartmentId == get(staffPath(request.resource.data.staffId)).data.get('departmentId','')
+    && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
+   allow update,delete: if false;
+  }
+  match /departments/{id} {
+   allow read: if active() && (role() == 'admin' || same(id));
+   allow create: if active() && role() == 'admin' && id.matches('[a-z0-9-]{1,100}') && request.resource.data.keys().hasOnly(['name','createdBy','createdAt']) && text(request.resource.data.name,120) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+   allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
+   allow delete: if false;
+  }
+  match /students/{id} {
+   allow get: if (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
+   allow list: if hod(resource.data.departmentId);
+   allow create: if hod(request.resource.data.departmentId) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
+    && request.resource.data.keys().hasOnly(['departmentId','name','matricNumber','matricKey','programme','level','session','email','createdBy','createdAt'])
+    && text(request.resource.data.name,120) && text(request.resource.data.matricNumber,80) && text(request.resource.data.programme,80) && text(request.resource.data.level,80) && text(request.resource.data.session,80)
+    && request.resource.data.email is string && request.resource.data.email.size() <= 254
+    && request.resource.data.matricKey == request.resource.data.matricNumber.upper().replace('[^A-Z0-9]','') && request.resource.data.matricKey.matches('[A-Z0-9]{1,80}')
+    && request.resource.data.session.upper().replace('[^A-Z0-9]','').matches('[A-Z0-9]{1,80}')
+    && id == request.resource.data.departmentId + '__' + request.resource.data.session.upper().replace('[^A-Z0-9]','') + '__' + request.resource.data.matricKey
+    && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+   allow update,delete: if false;
+  }
+  match /projects/{id} {
+   allow get: if hodStudent(id) || access(resource.data);
+   allow list: if access(resource.data);
+   allow create: if hod(request.resource.data.departmentId) && hodStudent(id) && request.resource.data.studentId == id
+    && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
+    && request.resource.data.title == '' && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+    && allocation(request.resource.data) && event(id,request.resource.data);
+   allow update: if hod(resource.data.departmentId)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
+    && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
+    && allocation(request.resource.data) && event(id,request.resource.data);
+   allow delete: if false;
+   match /allocations/{eventId} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if hodStudent(id)
+     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','previousSupervisorId','previousCoSupervisorId','reason','actorId','createdAt'])
+     && request.resource.data.departmentId == getAfter(projectPath(id)).data.departmentId && request.resource.data.studentId == id
+     && request.resource.data.supervisorId == getAfter(projectPath(id)).data.supervisorId && request.resource.data.coSupervisorId == getAfter(projectPath(id)).data.coSupervisorId
+     && eventId == getAfter(projectPath(id)).data.lastAllocationEventId
+     && request.resource.data.previousSupervisorId == (exists(projectPath(id)) ? get(projectPath(id)).data.supervisorId : '')
+     && request.resource.data.previousCoSupervisorId == (exists(projectPath(id)) ? get(projectPath(id)).data.coSupervisorId : '')
+     && text(request.resource.data.reason,500) && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
+   match /submissions/{submissionId} { allow read: if access(get(projectPath(id)).data); allow write: if false; }
+  }
+  match /{document=**} { allow read,write: if false; }
+ }
 }

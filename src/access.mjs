@@ -1,4 +1,4 @@
-export const ROLE_LABELS = { admin: 'Administrator', hod: 'Head of Department', lecturer: 'Supervisor' };
+export const ROLE_LABELS = { admin: 'Super Admin', hod: 'Head of Department', lecturer: 'Supervisor' };
 export function validProfile(profile) {
   return !!profile && profile.active === true && Object.hasOwn(ROLE_LABELS, profile.role)
     && typeof profile.displayName === 'string' && profile.displayName.trim().length > 0
