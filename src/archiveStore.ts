@@ -6,6 +6,8 @@ export async function checkArchive(departmentId:string,title:string){if(!titleKe
 export async function addArchiveEntry(departmentId:string,input:ArchiveInput,uid:string){
  const value={title:input.title.trim(),author:input.author.trim(),year:input.year,programme:input.programme.trim()};
  if(!titleKey(value.title)||!value.author||!value.programme||!Number.isInteger(value.year)||value.year<1900||value.year>2100)throw new Error('Enter all archive details and a valid year.');
+ const existing=await getDocs(query(collection(db,'archive'),where('departmentId','==',departmentId),where('titleKey','==',titleKey(value.title))));
+ if(existing.docs.some(d=>titleKey(d.data().author)===titleKey(value.author)&&d.data().year===value.year))throw new Error('This student’s project already exists in the archive.');
  const ref=doc(db,'archive',await archiveId(departmentId,value));
  await runTransaction(db,async tx=>{if((await tx.get(ref)).exists())throw new Error('These project details already exist in the archive.');const event=doc(collection(ref,'history'));const data={...value,departmentId,titleKey:titleKey(value.title),active:true,createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:event.id};tx.set(ref,data);tx.set(event,{...data,actorId:uid,recordedAt:serverTimestamp(),reason:'Historical archive entry added'});});
 }
