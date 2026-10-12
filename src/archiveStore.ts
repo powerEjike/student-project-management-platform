@@ -1,7 +1,9 @@
-import {collection,doc,getDocs,getFirestore,onSnapshot,query,runTransaction,serverTimestamp,where} from 'firebase/firestore';
+import {collection,doc,getDocs,getFirestore,onSnapshot,query,runTransaction,serverTimestamp,where,orderBy,limit,type Timestamp} from 'firebase/firestore';
 import {app} from './firebase';import {archiveId,titleKey,type ArchiveEntry,type ArchiveInput} from './archive';
 import {findTopicMatches} from './topicSimilarity';
 const db=getFirestore(app!);
+export type ArchiveChange={id:string;active:boolean;reason:string;actorId:string;recordedAt?:Timestamp};
+export function watchArchiveHistory(id:string,receive:(items:ArchiveChange[])=>void,fail:()=>void){return onSnapshot(query(collection(db,'archive',id,'history'),orderBy('recordedAt','desc'),limit(10)),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as ArchiveChange))),fail);}
 export function watchArchive(departmentId:string,receive:(items:ArchiveEntry[])=>void,fail:()=>void){return onSnapshot(query(collection(db,'archive'),where('departmentId','==',departmentId)),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as ArchiveEntry))),fail);}
 export async function checkArchive(departmentId:string,title:string){if(!titleKey(title))throw new Error('Enter a topic title containing letters or numbers.');const result=await getDocs(query(collection(db,'archive'),where('departmentId','==',departmentId),where('active','==',true)));return findTopicMatches(title,result.docs.map(d=>({id:d.id,...d.data()} as ArchiveEntry)));}
 export class ArchiveDuplicateError extends Error {}
