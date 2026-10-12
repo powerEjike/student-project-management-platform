@@ -2,7 +2,7 @@ import {emptyContacts,nextContactSummary} from '../src/contact.ts';
 import { readFile } from 'node:fs/promises';
 import { before, after, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, deleteDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, deleteDoc, where, writeBatch, orderBy, limit } from 'firebase/firestore';
 let env;
 before(async () => {
   env = await initializeTestEnvironment({projectId:'demo-projecttrack',firestore:{rules:await readFile('firestore.rules','utf8')}});
@@ -114,6 +114,13 @@ test('Super Admin alone manages validated programme templates with an atomic imm
  await assertFails(getDoc(doc(env.authenticatedContext('hod-b').firestore(),'milestoneTemplates',id)));
  const db=env.authenticatedContext('admin').firestore();await assertFails(updateDoc(doc(db,'milestoneTemplates',id),{steps:[{name:'Bypass audit',days:8}]}));await assertFails(deleteDoc(doc(db,'milestoneTemplates',id,'history','template-1')));
  await assertSucceeds(save('admin',Array.from({length:10},(_,i)=>({name:`Stage ${i+1}`,days:i*7})),'template-10'));
+ const historyQuery=userdb=>query(collection(userdb,'milestoneTemplates',id,'history'),orderBy('createdAt','desc'),limit(10));
+ const versions=await assertSucceeds(getDocs(historyQuery(db)));if(versions.size!==2||versions.docs.some(d=>d.data().actorId!=='admin'))throw Error('Super Admin must receive the two saved template versions.');
+ await assertSucceeds(getDoc(doc(db,'milestoneTemplates',id,'history','template-1')));
+ for(const uid of ['hod-a','hod-b','sup','co','other','foreign','inactive','inactive-sup','unknown']){const restricted=env.authenticatedContext(uid).firestore();await assertFails(getDoc(doc(restricted,'milestoneTemplates',id,'history','template-1')));await assertFails(getDocs(historyQuery(restricted)));}
+ const anonymous=env.unauthenticatedContext().firestore();await assertFails(getDoc(doc(anonymous,'milestoneTemplates',id,'history','template-1')));await assertFails(getDocs(historyQuery(anonymous)));
+ await assertFails(updateDoc(doc(db,'milestoneTemplates',id,'history','template-1'),{steps:[{name:'Changed old version',days:1}]}));
+ const original=(await getDoc(doc(db,'milestoneTemplates',id,'history','template-1'))).data();await assertFails(setDoc(doc(db,'milestoneTemplates',id,'history','invented-version'),{...original,lastEventId:'invented-version',createdAt:serverTimestamp()}));
 });
 test('rules restrict project reads, including nested submissions',async()=>{
   for(const uid of ['hod-a','sup','co']) for(const path of ['projects/p1','projects/p1/submissions/v1']) await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),path)));
