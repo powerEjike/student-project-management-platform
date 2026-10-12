@@ -2,10 +2,12 @@ import {validateTemplateRevision,type TemplateRevision} from './templateRevision
 import {validateTopicRevision} from './topicRevision';
 import {editedMilestone} from './milestoneEdit';
 import {quickMilestone} from './quickMilestone';
-import {collection,doc,getFirestore,onSnapshot,runTransaction,serverTimestamp} from 'firebase/firestore';
+import {collection,doc,getFirestore,onSnapshot,runTransaction,serverTimestamp,query,orderBy,limit,type Timestamp} from 'firebase/firestore';
 import {app} from './firebase';
 import {milestonesFrom,programmeKey,templateIdFor,type TemplateStep,type Milestone} from './workflow';
 const db=getFirestore(app!);
+export type TemplateChange={id:string;programme:string;steps:TemplateStep[];actorId:string;createdAt?:Timestamp};
+export function watchTemplateHistory(id:string,receive:(items:TemplateChange[])=>void,fail:()=>void){return onSnapshot(query(collection(db,'milestoneTemplates',id,'history'),orderBy('createdAt','desc'),limit(10)),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as TemplateChange))),fail);}
 export function watchTemplates(receive:(data:any[])=>void,fail:()=>void){return onSnapshot(collection(db,'milestoneTemplates'),s=>receive(s.docs.map(d=>({id:d.id,...d.data()}))),fail);}
 export async function saveTemplate(departmentId:string,programme:string,steps:TemplateStep[],uid:string,opened:TemplateRevision|null){
  if(!programmeKey(programme)||!steps.length||steps.length>10||steps.some(s=>!s.name.trim()||!Number.isInteger(s.days)||s.days<0||s.days>730))throw new Error('Add 1–10 named stages with deadline offsets between 0 and 730 days.');
