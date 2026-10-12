@@ -1,3 +1,4 @@
+import {editedMilestone} from './milestoneEdit';
 import {quickMilestone} from './quickMilestone';
 import {collection,doc,getFirestore,onSnapshot,runTransaction,serverTimestamp} from 'firebase/firestore';
 import {app} from './firebase';
@@ -20,10 +21,10 @@ export async function decideTopic(projectId:string,programme:string,title:string
   tx.update(ref,value);tx.set(event,{title:value.title,abstract:value.abstract,decision,note:value.decisionNote,previousDecision:before.topicDecision||'Awaiting topic',actorId:uid,actorName:actor!.displayName,createdAt:serverTimestamp()});
  });
 }
-export async function updateMilestone(projectId:string,key:string,milestone:Milestone,uid:string){
+export async function updateMilestone(projectId:string,key:string,milestone:Milestone,uid:string,expected:Milestone){
  await runTransaction(db,async tx=>{const ref=doc(db,'projects',projectId);const before=(await tx.get(ref)).data();if(!before?.milestones?.[key])throw new Error('This milestone no longer exists.');
   const actor=(await tx.get(doc(db,'staff',uid))).data();
-  const event=doc(collection(ref,'progressHistory'));const next={...milestone,name:before.milestones[key].name,note:milestone.note.trim()};
+  const event=doc(collection(ref,'progressHistory'));const next=editedMilestone(before.milestones[key],expected,milestone);
   tx.update(ref,{milestones:{...before.milestones,[key]:next},lastMilestoneKey:key,lastSupervisorUpdateAt:serverTimestamp(),lastProgressEventId:event.id,updatedBy:uid,updatedAt:serverTimestamp()});
   tx.set(event,{milestoneKey:key,previous:before.milestones[key],current:next,actorId:uid,actorName:actor!.displayName,createdAt:serverTimestamp()});
  });
