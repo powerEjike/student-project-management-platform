@@ -1,3 +1,4 @@
+import {validateTopicRevision} from './topicRevision';
 import {editedMilestone} from './milestoneEdit';
 import {quickMilestone} from './quickMilestone';
 import {collection,doc,getFirestore,onSnapshot,runTransaction,serverTimestamp} from 'firebase/firestore';
@@ -10,9 +11,9 @@ export async function saveTemplate(departmentId:string,programme:string,steps:Te
  const ref=doc(db,'milestoneTemplates',templateIdFor(departmentId,programme));
  await runTransaction(db,async tx=>{await tx.get(ref);const event=doc(collection(ref,'history'));const value={departmentId,programme:programme.trim(),programmeKey:programmeKey(programme),steps:steps.map(s=>({...s,name:s.name.trim()})),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:event.id};tx.set(ref,value);tx.set(event,{...value,actorId:uid,createdAt:serverTimestamp()});});
 }
-export async function decideTopic(projectId:string,programme:string,title:string,abstract:string,decision:string,note:string,uid:string){
+export async function decideTopic(projectId:string,programme:string,title:string,abstract:string,decision:string,note:string,uid:string,expectedEventId:string|undefined){
  await runTransaction(db,async tx=>{
-  const ref=doc(db,'projects',projectId);const before=(await tx.get(ref)).data();if(!before)throw new Error('Project folder not found.');if(before.topicDecision==='Approved')throw new Error('This topic has already been approved.');
+  const ref=doc(db,'projects',projectId);const before=(await tx.get(ref)).data();if(!before)throw new Error('Project folder not found.');validateTopicRevision(before,expectedEventId);
   const actor=(await tx.get(doc(db,'staff',uid))).data();
   const templateId=templateIdFor(before.departmentId,programme);
   const template=decision==='Approved'?(await tx.get(doc(db,'milestoneTemplates',templateId))).data():null;
