@@ -1,3 +1,4 @@
+import {validateTemplateRevision,type TemplateRevision} from './templateRevision';
 import {validateTopicRevision} from './topicRevision';
 import {editedMilestone} from './milestoneEdit';
 import {quickMilestone} from './quickMilestone';
@@ -6,10 +7,10 @@ import {app} from './firebase';
 import {milestonesFrom,programmeKey,templateIdFor,type TemplateStep,type Milestone} from './workflow';
 const db=getFirestore(app!);
 export function watchTemplates(receive:(data:any[])=>void,fail:()=>void){return onSnapshot(collection(db,'milestoneTemplates'),s=>receive(s.docs.map(d=>({id:d.id,...d.data()}))),fail);}
-export async function saveTemplate(departmentId:string,programme:string,steps:TemplateStep[],uid:string){
+export async function saveTemplate(departmentId:string,programme:string,steps:TemplateStep[],uid:string,opened:TemplateRevision|null){
  if(!programmeKey(programme)||!steps.length||steps.length>10||steps.some(s=>!s.name.trim()||!Number.isInteger(s.days)||s.days<0||s.days>730))throw new Error('Add 1–10 named stages with deadline offsets between 0 and 730 days.');
  const ref=doc(db,'milestoneTemplates',templateIdFor(departmentId,programme));
- await runTransaction(db,async tx=>{await tx.get(ref);const event=doc(collection(ref,'history'));const value={departmentId,programme:programme.trim(),programmeKey:programmeKey(programme),steps:steps.map(s=>({...s,name:s.name.trim()})),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:event.id};tx.set(ref,value);tx.set(event,{...value,actorId:uid,createdAt:serverTimestamp()});});
+ return runTransaction(db,async tx=>{const current=(await tx.get(ref)).data();validateTemplateRevision(ref.id,current,opened);const event=doc(collection(ref,'history'));const value={departmentId,programme:programme.trim(),programmeKey:programmeKey(programme),steps:steps.map(s=>({...s,name:s.name.trim()})),updatedBy:uid,updatedAt:serverTimestamp(),lastEventId:event.id};tx.set(ref,value);tx.set(event,{...value,actorId:uid,createdAt:serverTimestamp()});return {id:ref.id,lastEventId:event.id};});
 }
 export async function decideTopic(projectId:string,programme:string,title:string,abstract:string,decision:string,note:string,uid:string,expectedEventId:string|undefined){
  await runTransaction(db,async tx=>{
