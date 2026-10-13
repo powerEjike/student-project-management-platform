@@ -150,9 +150,10 @@ test('rules restrict project reads, including nested submissions',async()=>{
 test('users cannot promote themselves or alter staff access',async()=>{
   for(const uid of ['sup','admin','unapproved']) await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'staff',uid),{role:'admin',active:true}));
 });
-test('staff may read their own approval, but not another profile',async()=>{
+test('staff can discover active department colleagues for chat but not foreign inactive or admin profiles',async()=>{
   await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'staff','sup')));
-  await assertFails(getDoc(doc(env.authenticatedContext('sup').firestore(),'staff','co')));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('sup').firestore(),'staff','co')));
+  for(const other of ['foreign','inactive-sup','admin'])await assertFails(getDoc(doc(env.authenticatedContext('sup').firestore(),'staff',other)));
 });
 test('reassignment removes the former supervisor access',async()=>{
   await env.withSecurityRulesDisabled(async context => {
