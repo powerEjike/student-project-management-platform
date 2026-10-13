@@ -324,3 +324,28 @@ test('agreed actions are optional private immutable contact evidence and require
  await assertFails(updateDoc(doc(db,'projects',id,'contacts','actions-1'),{agreedActions:'Changed tasks'}));
 });
 
+
+test('department staff chat scopes membership, protects private messages and supports only own edits and read settings',async()=>{
+ const hod=env.authenticatedContext('hod-a').firestore();const sup=env.authenticatedContext('sup').firestore();const co=env.authenticatedContext('co').firestore();
+ const chat=(kind,memberIds=[],name='Synthetic conversation')=>({departmentId:'dept-a',kind,name,memberIds,createdBy:'sup',createdAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(sup,'chats','general__dept-a'),chat('general')));
+ await assertFails(setDoc(doc(sup,'chats','wrong-general'),chat('general')));
+ await assertSucceeds(setDoc(doc(sup,'chats','chat-direct'),chat('direct',['sup','co'])));
+ await assertSucceeds(setDoc(doc(sup,'chats','chat-group'),chat('group',['sup','co','hod-a'])));
+ await env.withSecurityRulesDisabled(async c=>{for(const id of ['chat1','chat2','chat3','chat4','chat5'])await setDoc(doc(c.firestore(),'staff',id),{role:'lecturer',departmentId:'dept-a',active:true,displayName:id});});
+ const eight=['sup','co','hod-a','other','chat1','chat2','chat3','chat4'];await assertSucceeds(setDoc(doc(sup,'chats','chat-eight'),chat('group',eight)));await assertFails(setDoc(doc(sup,'chats','chat-nine'),chat('group',[...eight,'chat5'])));
+ for(const ids of [['sup','foreign'],['sup','inactive-sup'],['sup','admin'],['co','hod-a'],['sup','sup'],['sup','co','hod-a']])await assertFails(setDoc(doc(sup,'chats','invalid-chat'),chat('direct',ids)));
+ const peerQuery=db=>query(collection(db,'staff'),where('departmentId','==','dept-a'),where('active','==',true),where('role','in',['hod','lecturer']));await assertSucceeds(getDocs(peerQuery(sup)));await assertFails(getDocs(collection(sup,'staff')));
+ for(const uid of ['sup','co'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'chats','chat-direct')));
+ for(const uid of ['hod-a','admin','other','foreign','inactive-sup'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'chats','chat-direct')));
+ await assertSucceeds(getDocs(query(collection(sup,'chats'),where('departmentId','==','dept-a'),where('memberIds','array-contains','sup'))));await assertFails(getDocs(collection(sup,'chats')));
+ const msg=(uid,announcement=false)=>({body:'Hello team',senderId:uid,senderName:uid,removed:false,announcement,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(sup,'chats','chat-direct','messages','first'),{...msg('sup'),body:'Hello team'+String.fromCharCode(10)+'Please review the schedule.'}));await assertSucceeds(getDocs(query(collection(co,'chats','chat-direct','messages'),orderBy('createdAt','desc'))));
+ for(const uid of ['hod-a','admin','other','foreign','inactive-sup'])await assertFails(getDocs(collection(env.authenticatedContext(uid).firestore(),'chats','chat-direct','messages')));
+ await assertFails(setDoc(doc(co,'chats','chat-direct','messages','forged'),msg('sup')));await assertFails(setDoc(doc(sup,'chats','general__dept-a','messages','fake-announcement'),msg('sup',true)));
+ await assertSucceeds(setDoc(doc(hod,'chats','general__dept-a','messages','announcement'),msg('hod-a',true)));await assertSucceeds(getDoc(doc(co,'chats','general__dept-a','messages','announcement')));
+ await assertFails(updateDoc(doc(co,'chats','chat-direct','messages','first'),{body:'Someone else edit',updatedAt:serverTimestamp()}));await assertSucceeds(updateDoc(doc(sup,'chats','chat-direct','messages','first'),{body:'Edited own message',updatedAt:serverTimestamp()}));await assertFails(deleteDoc(doc(sup,'chats','chat-direct','messages','first')));
+ await assertSucceeds(updateDoc(doc(sup,'chats','chat-direct','messages','first'),{body:'',removed:true,updatedAt:serverTimestamp()}));await assertFails(updateDoc(doc(sup,'chats','chat-direct','messages','first'),{body:'Restored',removed:false,updatedAt:serverTimestamp()}));
+ await assertSucceeds(setDoc(doc(sup,'chats','chat-direct','readStates','sup'),{lastReadAt:serverTimestamp(),muted:true}));await assertFails(getDoc(doc(co,'chats','chat-direct','readStates','sup')));await assertFails(setDoc(doc(co,'chats','chat-direct','readStates','sup'),{lastReadAt:serverTimestamp(),muted:false}));
+ await assertFails(updateDoc(doc(sup,'chats','chat-direct'),{memberIds:['sup','other']}));await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'chats','general__dept-a')));
+});

@@ -7,6 +7,11 @@ service cloud.firestore {
   function role() { return get(self()).data.role; }
   function same(id) { return active() && get(self()).data.departmentId == id; }
   function hod(id) { return same(id) && role() == 'hod'; }
+  function chatStaff(departmentId) { return same(departmentId) && role() in ['hod','lecturer']; }
+  function chatMember(uid,departmentId) { let s=get(staffPath(uid)).data; return s.active == true && s.departmentId == departmentId && s.role in ['hod','lecturer']; }
+  function chatMemberAt(ids,i,departmentId) { return ids.size() <= i || chatMember(ids[i],departmentId); }
+  function validChatMembers(ids,departmentId) { return ids is list && ids.size() >= 2 && ids.size() <= 8 && ids.toSet().size() == ids.size() && request.auth.uid in ids && chatMemberAt(ids,0,departmentId) && chatMemberAt(ids,1,departmentId) && chatMemberAt(ids,2,departmentId) && chatMemberAt(ids,3,departmentId) && chatMemberAt(ids,4,departmentId) && chatMemberAt(ids,5,departmentId) && chatMemberAt(ids,6,departmentId) && chatMemberAt(ids,7,departmentId); }
+  function chatAccess(c) { return chatStaff(c.departmentId) && (c.kind == 'general' || request.auth.uid in c.memberIds); }
   function text(v,max) { return v is string && v.size() > 0 && v.size() <= max && v.matches('.*[^ ].*'); }
   function titleKey(value) { return value.replace('[^\\p{L}\\p{N}\\s]','').replace('\\s+',' ').trim(); }
   function projectPath(id) { return /databases/$(database)/documents/projects/$(id); }
@@ -118,8 +123,8 @@ service cloud.firestore {
    }
   }
   match /staff/{uid} {
-   allow get: if (signedIn() && request.auth.uid == uid) || (active() && role() == 'admin') || (active() && role() == 'hod' && same(resource.data.departmentId) && resource.data.role == 'lecturer' && resource.data.active == true);
-   allow list: if active() && (role() == 'admin' || (role() == 'hod' && same(resource.data.departmentId) && resource.data.role == 'lecturer' && resource.data.active == true));
+   allow get: if (signedIn() && request.auth.uid == uid) || (active() && role() == 'admin') || (chatStaff(resource.data.departmentId) && resource.data.role in ['hod','lecturer'] && resource.data.active == true);
+   allow list: if active() && (role() == 'admin' || (chatStaff(resource.data.departmentId) && resource.data.role in ['hod','lecturer'] && resource.data.active == true));
    allow create,delete: if false;
    allow update: if active() && role() == 'admin' && uid != request.auth.uid
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role','active','departmentId','departmentName','updatedAt','lastAccessEventId'])
@@ -321,6 +326,33 @@ service cloud.firestore {
      && request.resource.data.previous == get(projectPath(id)).data.milestones[request.resource.data.milestoneKey] && request.resource.data.current == getAfter(projectPath(id)).data.milestones[request.resource.data.milestoneKey]
      && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
     allow update,delete: if false;
+   }
+  }
+  match /chats/{cid} {
+   allow get: if (active() && role() in ['hod','lecturer'] && !exists(/databases/$(database)/documents/chats/$(cid))) || chatAccess(resource.data);
+   allow list: if chatAccess(resource.data);
+   allow create: if chatStaff(request.resource.data.departmentId)
+    && request.resource.data.keys().hasOnly(['departmentId','kind','name','memberIds','createdBy','createdAt'])
+    && text(request.resource.data.name,100) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+    && ((request.resource.data.kind == 'general' && cid == 'general__'+request.resource.data.departmentId && request.resource.data.memberIds == [])
+     || (request.resource.data.kind in ['direct','group'] && validChatMembers(request.resource.data.memberIds,request.resource.data.departmentId) && (request.resource.data.kind != 'direct' || request.resource.data.memberIds.size() == 2)));
+   allow update,delete: if false;
+   match /messages/{mid} {
+    function parent() { return get(/databases/$(database)/documents/chats/$(cid)).data; }
+    function validMessage(m) { return m.body is string && m.body.size() <= 4000 && m.removed is bool && m.announcement is bool && (m.removed ? m.body == '' : m.body.trim().size() > 0) && (!m.announcement || (role() == 'hod' && parent().kind == 'general')); }
+    allow read: if chatAccess(parent());
+    allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','createdAt','updatedAt'])
+     && request.resource.data.senderId == request.auth.uid && request.resource.data.senderName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.removed == false && validMessage(request.resource.data);
+    allow update: if chatAccess(parent()) && resource.data.senderId == request.auth.uid && resource.data.removed == false
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt']) && request.resource.data.updatedAt == request.time && validMessage(request.resource.data);
+    allow delete: if false;
+   }
+   match /readStates/{uid} {
+    allow get: if chatAccess(get(/databases/$(database)/documents/chats/$(cid)).data) && uid == request.auth.uid;
+    allow list,delete: if false;
+    allow create,update: if chatAccess(get(/databases/$(database)/documents/chats/$(cid)).data) && uid == request.auth.uid
+     && request.resource.data.keys().hasOnly(['lastReadAt','muted']) && request.resource.data.muted is bool && request.resource.data.lastReadAt is timestamp && request.resource.data.lastReadAt <= request.time
+     && (!exists(/databases/$(database)/documents/chats/$(cid)/readStates/$(uid)) || request.resource.data.lastReadAt >= resource.data.lastReadAt);
    }
   }
   match /{document=**} { allow read,write: if false; }
