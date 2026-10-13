@@ -363,3 +363,11 @@ test('chat project references are atomic opaque links and never grant or retain 
  await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',projectId),{supervisorId:'other',coSupervisorId:''}));
  for(const db of [sup,co])await assertFails(getDoc(doc(db,'chats',chatId,'projectReferences','opaque-reference')));await assertSucceeds(getDoc(doc(other,'chats',chatId,'projectReferences','opaque-reference')));await assertSucceeds(getDoc(doc(hod,'chats',chatId,'projectReferences','opaque-reference')));
 });
+
+test('project notice seen receipts are personal timestamp-only records and never grant project access',async()=>{
+ const sup=env.authenticatedContext('sup').firestore();const id='f'.repeat(64);const ref=doc(sup,'notificationReceipts','sup','items',id);
+ await assertSucceeds(setDoc(ref,{seenAt:serverTimestamp()}));await assertSucceeds(getDocs(collection(sup,'notificationReceipts','sup','items')));await assertSucceeds(setDoc(ref,{seenAt:serverTimestamp()}));
+ for(const uid of ['co','hod-a','hod-b','admin','inactive-sup','unknown']){const db=env.authenticatedContext(uid).firestore();await assertFails(getDoc(doc(db,'notificationReceipts','sup','items',id)));await assertFails(getDocs(collection(db,'notificationReceipts','sup','items')));await assertFails(setDoc(doc(db,'notificationReceipts','sup','items',id),{seenAt:serverTimestamp()}));}
+ await assertFails(setDoc(doc(sup,'notificationReceipts','sup','items','not-a-hash'),{seenAt:serverTimestamp()}));await assertFails(setDoc(ref,{seenAt:serverTimestamp(),projectTitle:'Private metadata'}));await assertFails(deleteDoc(ref));await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'notificationReceipts','sup','items',id)));
+ await assertFails(setDoc(doc(env.authenticatedContext('admin').firestore(),'notificationReceipts','admin','items',id),{seenAt:serverTimestamp()}));
+});

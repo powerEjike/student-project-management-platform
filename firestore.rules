@@ -368,6 +368,12 @@ service cloud.firestore {
      && (!exists(/databases/$(database)/documents/chats/$(cid)/readStates/$(uid)) || request.resource.data.lastReadAt >= resource.data.lastReadAt);
    }
   }
+  match /notificationReceipts/{uid}/items/{nid} {
+   allow read: if active() && role() in ['hod','lecturer'] && uid == request.auth.uid;
+   allow create,update: if active() && role() in ['hod','lecturer'] && uid == request.auth.uid
+    && nid.matches('[a-f0-9]{64}') && request.resource.data.keys().hasOnly(['seenAt']) && request.resource.data.seenAt == request.time;
+   allow delete: if false;
+  }
   match /{document=**} { allow read,write: if false; }
  }
 }
