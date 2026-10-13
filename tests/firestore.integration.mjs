@@ -6,6 +6,24 @@ import { before, after, test } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, deleteDoc, where, writeBatch, orderBy, limit } from 'firebase/firestore';
 let env;
+test('rubrics require audited admin configuration and current assigned immutable bounded reviews',async()=>{
+ const admin=env.authenticatedContext('admin').firestore();const sup=env.authenticatedContext('sup').firestore();
+ const criteria=Array.from({length:5},(_,i)=>({name:`Criterion ${i+1}`,maximum:10}));
+ async function configure(uid='admin',revision='rubric-v1',rows=criteria,audit=true){const db=env.authenticatedContext(uid).firestore();const batch=writeBatch(db);const value={criteria:rows,revision,updatedBy:uid,updatedAt:serverTimestamp()};batch.set(doc(db,'departmentRubrics','dept-a'),value);if(audit)batch.set(doc(db,'departmentRubrics','dept-a','history',revision),value);return batch.commit();}
+ for(const uid of ['sup','co','hod-a','hod-b','inactive'])await assertFails(configure(uid));await assertFails(configure('admin','no-audit',criteria,false));await assertFails(configure('admin','bad-scale',[{name:'Test',maximum:0}]));await assertSucceeds(configure());await assertFails(configure());
+ await seedWorkflow('rubric-project');
+ const value={criteria,scores:[0,5,10,7,9],summary:'Synthetic scored review',rubricRevision:'rubric-v1',actorId:'sup',actorName:'sup',createdAt:serverTimestamp()};
+ async function review(uid='sup',changes={},rid='review'){const db=env.authenticatedContext(uid).firestore();return setDoc(doc(db,'projects','rubric-project','scoredReviews',rid),{...value,actorId:uid,actorName:uid,...changes});}
+ for(const uid of ['admin','hod-a','hod-b','other','foreign','inactive-sup'])await assertFails(review(uid));
+ for(const changes of [{scores:[0,5,10,7,11]},{scores:[0,5,10,7]},{scores:[0,5,10,7,0.5]},{summary:' '},{rubricRevision:'wrong'},{criteria:[{name:'Fake',maximum:100}]},{actorName:'Impersonation'},{status:'Completed'}])await assertFails(review('sup',changes));
+ await assertSucceeds(review());await assertSucceeds(review('co',{},'co-review'));await assertFails(updateDoc(doc(sup,'projects','rubric-project','scoredReviews','review'),{summary:'Changed'}));await assertFails(deleteDoc(doc(sup,'projects','rubric-project','scoredReviews','review')));
+ for(const uid of ['sup','co','hod-a'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects','rubric-project','scoredReviews','review')));for(const uid of ['admin','other','hod-b'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects','rubric-project','scoredReviews','review')));
+ await assertFails(configure('admin','duplicate-names',[{name:'Methods',maximum:10},{name:' methods ',maximum:20}]));await assertSucceeds(configure('admin','rubric-v2',[{name:'New criterion',maximum:20}]));await assertFails(review('sup',{},'stale'));const saved=(await getDoc(doc(sup,'projects','rubric-project','scoredReviews','review'))).data();if(saved.criteria.length!==5||saved.scores[4]!==9)throw Error('Earlier review scale must remain intact.');await assertSucceeds(getDoc(doc(admin,'departmentRubrics','dept-a','history','rubric-v1')));
+ await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects','rubric-project'),{releaseState:'Withheld'}));await assertFails(review('sup',{criteria:[{name:'New criterion',maximum:20}],scores:[10],rubricRevision:'rubric-v2'},'withheld'));
+ await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects','rubric-project'),{releaseState:'',completedDate:'2026-01-01'}));await assertFails(review('sup',{criteria:[{name:'New criterion',maximum:20}],scores:[10],rubricRevision:'rubric-v2'},'archived'));
+ await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects','rubric-project'),{supervisorId:'other',coSupervisorId:''}));await assertFails(getDoc(doc(sup,'projects','rubric-project','scoredReviews','review')));await assertFails(review('sup',{},'former'));
+ for(const uid of ['sup','hod-a'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'departmentRubrics','dept-a')));await assertFails(getDoc(doc(env.authenticatedContext('hod-b').firestore(),'departmentRubrics','dept-a')));
+});
 before(async () => {
   env = await initializeTestEnvironment({projectId:'demo-projecttrack',firestore:{rules:await readFile('firestore.rules','utf8')}});
   await env.withSecurityRulesDisabled(async context => {

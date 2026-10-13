@@ -47,6 +47,11 @@ service cloud.firestore {
     && validMilestone(p.milestones[key]) && p.milestones[key].name == resource.data.milestones[key].name
     && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
+  function rubricCriterion(c) { return c.keys().hasOnly(['name','maximum']) && c.name is string && c.name.trim().size() > 0 && c.name.size() <= 100 && c.maximum is int && c.maximum >= 1 && c.maximum <= 100; }
+  function rubricItem(cs,i) { return cs.size() <= i || rubricCriterion(cs[i]); }
+  function rubricDistinct(cs,i) { return cs.size() <= i || (cs[i].name.trim().lower() != cs[0].name.trim().lower() && (i <= 1 || cs[i].name.trim().lower() != cs[1].name.trim().lower()) && (i <= 2 || cs[i].name.trim().lower() != cs[2].name.trim().lower()) && (i <= 3 || cs[i].name.trim().lower() != cs[3].name.trim().lower())); }
+  function rubricValid(cs) { return cs is list && cs.size() >= 1 && cs.size() <= 5 && rubricItem(cs,0) && rubricItem(cs,1) && rubricItem(cs,2) && rubricItem(cs,3) && rubricItem(cs,4) && rubricDistinct(cs,1) && rubricDistinct(cs,2) && rubricDistinct(cs,3) && rubricDistinct(cs,4); }
+  function scoreItem(cs,ss,i) { return cs.size() <= i || (ss[i] is int && ss[i] >= 0 && ss[i] <= cs[i].maximum); }
   function feedbackWriter(p) { return access(p) && role() == 'lecturer' && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
   function validFeedback(f,p) { return f.keys().hasOnly(['category','priority','milestoneKey','milestoneName','comment','summary','actorId','actorName','createdAt'])
    && f.category in ['Content','Methodology','Referencing','Language','Formatting'] && f.priority in ['Action required','Suggestion']
@@ -165,6 +170,22 @@ service cloud.firestore {
    allow create: if active() && role() == 'admin' && id.matches('[a-z0-9-]{1,100}') && request.resource.data.keys().hasOnly(['name','createdBy','createdAt']) && text(request.resource.data.name,120) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
    allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
    allow delete: if false;
+  }
+  match /departmentRubrics/{id} {
+   allow read: if active() && (role() == 'admin' || same(id));
+   allow create,update: if active() && role() == 'admin' && exists(/databases/$(database)/documents/departments/$(id))
+    && request.resource.data.keys().hasOnly(['criteria','revision','updatedBy','updatedAt']) && rubricValid(request.resource.data.criteria)
+    && text(request.resource.data.revision,128) && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+    && !exists(/databases/$(database)/documents/departmentRubrics/$(id)/history/$(request.resource.data.revision))
+    && getAfter(/databases/$(database)/documents/departmentRubrics/$(id)/history/$(request.resource.data.revision)).data == request.resource.data;
+   allow delete: if false;
+   match /history/{event} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin' && request.resource.data.revision == event
+     && request.resource.data == getAfter(/databases/$(database)/documents/departmentRubrics/$(id)).data
+     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+    allow update,delete: if false;
+   }
   }
   match /departmentSettings/{id} {
    function manager() { return active() && (role() == 'admin' || hod(id)); }
@@ -293,6 +314,19 @@ service cloud.firestore {
     allow update,delete: if false;
    }
 
+   match /scoredReviews/{rid} {
+    function currentRubric() { return get(/databases/$(database)/documents/departmentRubrics/$(get(projectPath(id)).data.departmentId)).data; }
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if feedbackWriter(get(projectPath(id)).data)
+     && request.resource.data.keys().hasOnly(['criteria','scores','summary','rubricRevision','actorId','actorName','createdAt'])
+     && request.resource.data.criteria == currentRubric().criteria && request.resource.data.rubricRevision == currentRubric().revision
+     && request.resource.data.scores is list && request.resource.data.scores.size() == request.resource.data.criteria.size()
+     && scoreItem(request.resource.data.criteria,request.resource.data.scores,0) && scoreItem(request.resource.data.criteria,request.resource.data.scores,1)
+     && scoreItem(request.resource.data.criteria,request.resource.data.scores,2) && scoreItem(request.resource.data.criteria,request.resource.data.scores,3) && scoreItem(request.resource.data.criteria,request.resource.data.scores,4)
+     && request.resource.data.summary is string && request.resource.data.summary.trim().size() > 0 && request.resource.data.summary.size() <= 2000
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
    match /feedback/{fid} {
     allow read: if access(get(projectPath(id)).data);
     allow create: if feedbackWriter(get(projectPath(id)).data) && validFeedback(request.resource.data,get(projectPath(id)).data)
