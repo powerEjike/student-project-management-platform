@@ -47,6 +47,15 @@ service cloud.firestore {
     && validMilestone(p.milestones[key]) && p.milestones[key].name == resource.data.milestones[key].name
     && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastProgressEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
+  function feedbackWriter(p) { return access(p) && role() == 'lecturer' && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
+  function validFeedback(f,p) { return f.keys().hasOnly(['category','priority','milestoneKey','milestoneName','comment','summary','actorId','actorName','createdAt'])
+   && f.category in ['Content','Methodology','Referencing','Language','Formatting'] && f.priority in ['Action required','Suggestion']
+   && f.comment is string && f.comment.trim().size() > 0 && f.comment.size() <= 2000 && f.summary is string && f.summary.size() <= 2000
+   && f.milestoneKey is string && ((f.milestoneKey == '' && f.milestoneName == 'Overall project') || (f.milestoneKey in p.get('milestones',{}) && f.milestoneName == p.milestones[f.milestoneKey].name))
+   && f.actorId == request.auth.uid && f.actorName == get(self()).data.displayName && f.createdAt == request.time; }
+  function feedbackChange(id) { let p=request.resource.data; let f=getAfter(/databases/$(database)/documents/projects/$(id)/feedback/$(p.lastFeedbackEventId)).data;
+   return feedbackWriter(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['lastFeedbackEventId','lastFeedbackBy','lastFeedbackAt','updatedBy','updatedAt'])
+    && text(p.lastFeedbackEventId,128) && p.lastFeedbackBy == request.auth.uid && p.lastFeedbackAt == request.time && p.updatedBy == request.auth.uid && p.updatedAt == request.time && validFeedback(f,resource.data); }
   function defenceChange(id) { let p=request.resource.data; let e=getAfter(/databases/$(database)/documents/projects/$(id)/defenceHistory/$(p.lastDefenceEventId)).data;
    return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && p.diff(resource.data).affectedKeys().hasOnly(['status','defenceCleared','defenceDate','defenceBy','defenceByName','defenceNote','defenceOverride','lastDefenceEventId','updatedBy','updatedAt'])
     && p.status == (p.defenceCleared ? 'Completed' : 'Research in progress') && p.defenceCleared is bool && p.defenceCleared != resource.data.get('defenceCleared',false)
@@ -266,7 +275,7 @@ service cloud.firestore {
    allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasAny(['releaseState','releaseRequestId']) ? releaseChange(id) : ((!resource.data.keys().hasAny(['completedDate']) && ((!(resource.data.get('releaseState','') in ['Pending','Withheld']) && hod(resource.data.departmentId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
     && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
-    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id))) || completionChange(id)));
+    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id) || feedbackChange(id))) || completionChange(id)));
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);
@@ -281,6 +290,12 @@ service cloud.firestore {
     allow update,delete: if false;
    }
 
+   match /feedback/{fid} {
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if feedbackWriter(get(projectPath(id)).data) && validFeedback(request.resource.data,get(projectPath(id)).data)
+     && getAfter(projectPath(id)).data.lastFeedbackEventId == fid && getAfter(projectPath(id)).data.lastFeedbackBy == request.auth.uid && getAfter(projectPath(id)).data.lastFeedbackAt == request.time;
+    allow update,delete: if false;
+   }
    match /contacts/{cid} {
     allow read: if contactPrivate(id);
     allow create: if contactWriter(id) && validContact(request.resource.data) && getAfter(contactSummaryPath(id)).data.lastEventId == cid && getAfter(contactSummaryPath(id)).data.updatedAt == request.time;
