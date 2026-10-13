@@ -341,11 +341,24 @@ service cloud.firestore {
     function parent() { return get(/databases/$(database)/documents/chats/$(cid)).data; }
     function validMessage(m) { return m.body is string && m.body.size() <= 4000 && m.removed is bool && m.announcement is bool && (m.removed ? m.body == '' : m.body.trim().size() > 0) && (!m.announcement || (role() == 'hod' && parent().kind == 'general')); }
     allow read: if chatAccess(parent());
-    allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','createdAt','updatedAt'])
-     && request.resource.data.senderId == request.auth.uid && request.resource.data.senderName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.removed == false && validMessage(request.resource.data);
+    allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','projectRefId','createdAt','updatedAt'])
+     && request.resource.data.senderId == request.auth.uid && request.resource.data.senderName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.removed == false && validMessage(request.resource.data)
+     && (request.resource.data.get('projectRefId','') == '' || (request.resource.data.projectRefId == mid && getAfter(/databases/$(database)/documents/chats/$(cid)/projectReferences/$(mid)).data.createdBy == request.auth.uid));
     allow update: if chatAccess(parent()) && resource.data.senderId == request.auth.uid && resource.data.removed == false
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt']) && request.resource.data.updatedAt == request.time && validMessage(request.resource.data);
     allow delete: if false;
+   }
+   match /projectReferences/{mid} {
+    function parentChat() { return get(/databases/$(database)/documents/chats/$(cid)).data; }
+    allow get: if chatAccess(parentChat()) && access(get(projectPath(resource.data.projectId)).data);
+    allow list,update,delete: if false;
+    allow create: if chatAccess(parentChat()) && request.resource.data.keys().hasOnly(['projectId','createdBy','createdAt'])
+     && request.resource.data.projectId is string && access(get(projectPath(request.resource.data.projectId)).data)
+     && get(projectPath(request.resource.data.projectId)).data.departmentId == parentChat().departmentId
+     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+     && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(mid)).data.projectRefId == mid
+     && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(mid)).data.senderId == request.auth.uid
+     && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(mid)).data.createdAt == request.time;
    }
    match /readStates/{uid} {
     allow get: if chatAccess(get(/databases/$(database)/documents/chats/$(cid)).data) && uid == request.auth.uid;

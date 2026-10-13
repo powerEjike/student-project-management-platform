@@ -33,10 +33,10 @@ import TopicStart from './TopicStart';
 import ProjectOverview from './ProjectOverview';
 import {matchesProjectFilter,overdueCount,type ProjectFilter} from './projectSummary';
 import {todayInLagos} from './workflow';
-type Props={profile:StaffProfile;uid:string};
+type Props={profile:StaffProfile;uid:string;requestedProjectId?:string|null;onProjectRequestHandled?:()=>void};
 const blankStudent={name:'',matricNumber:'',programme:'',level:'',session:'',email:''};
 function readableError(error:unknown){const e=error as {code?:string;message?:string};return e.code==='permission-denied'?'Your account does not have permission for this action.':e.code?'Could not save this change. Check your connection and try again.':e.message||'Could not save this change.';}
-export default function ProjectsWorkspace({profile,uid}:Props){
+export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProjectRequestHandled}:Props){
   const [levelFilter,setLevelFilter]=useState('');const [milestoneFilter,setMilestoneFilter]=useState('');const [milestoneStatus,setMilestoneStatus]=useState('');
   const [page,setPage]=useState(0);
   const [supervisorFilter,setSupervisorFilter]=useState('');
@@ -61,6 +61,7 @@ export default function ProjectsWorkspace({profile,uid}:Props){
     const offLecturers=profile.role==='hod'?watchLecturers(profile.departmentId!,setLecturers,fail):()=>{};
     return()=>{active=false;offProjects();offStudents();offLecturers();};
   },[profile.role,profile.departmentId,uid]);
+  useEffect(()=>{if(!requestedProjectId||!loaded||profile.role==='admin')return;const target=projects.find(p=>p.id===requestedProjectId);if(target&&students.some(s=>s.id===target.studentId)){setOpenProject(target.id);onProjectRequestHandled?.();return;}const timer=setTimeout(()=>{setError('Could not open this linked project. Your access may have changed; select an available folder or try the link again.');onProjectRequestHandled?.();},10000);return()=>clearTimeout(timer);},[requestedProjectId,loaded,projects,students,profile.role]);
   useEffect(()=>{setHistory([]);if(!openProject)return;return watchAllocationHistory(openProject,setHistory,()=>setError('Could not load allocation history.'));},[openProject]);
   useEffect(()=>{setPage(0);setSelected([]);setShowAllocate(false);},[search,session,programme,levelFilter,milestoneFilter,milestoneStatus,supervisorFilter,statusFilter,onlyUnassigned,staleDays]);
   const projectMap=new Map(projects.map(p=>[p.studentId,p]));
