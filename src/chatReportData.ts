@@ -1,0 +1,3 @@
+export const chatReportStates=['Reported','Under review','Closed','Escalated'] as const;
+export function reportReason(value:string){const reason=value.trim();if(reason.length<3||reason.length>2000)throw Error('Explain the concern in 3 to 2,000 characters.');return reason;}
+export function reportDecision(state:string,note:string,targetRole:string,role:string){note=reportReason(note);if(!['Under review','Closed','Escalated'].includes(state)||!['hod','admin'].includes(role)||targetRole!==role||state==='Escalated'&&role!=='hod')throw Error('Choose an available review decision.');return{state,decisionNote:note,targetRole:state==='Escalated'?'admin':targetRole};}

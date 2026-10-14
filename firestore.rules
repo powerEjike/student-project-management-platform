@@ -2,6 +2,39 @@ rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
   function signedIn() { return request.auth != null; }
+  function reportReviewer(r) { return active() && ((role() == 'admin' && r.targetRole == 'admin') || (hod(r.departmentId) && r.targetRole == 'hod')); }
+  function reportReader(r) { return reportReviewer(r) || (chatStaff(r.departmentId) && r.reporterId == request.auth.uid); }
+  match /chatReports/{reportId} {
+   function reportPath() { return /databases/$(database)/documents/chatReports/$(reportId); }
+   function validReportAudit(r) { let e=getAfter(/databases/$(database)/documents/chatReports/$(reportId)/history/$(r.revision)).data; return r.updatedBy == request.auth.uid && r.updatedAt == request.time
+    && r.revision is string && r.revision.matches('[a-zA-Z0-9_-]{1,128}') && !exists(/databases/$(database)/documents/chatReports/$(reportId)/history/$(r.revision))
+    && e.state == r.state && e.targetRole == r.targetRole && e.actorId == request.auth.uid && e.actorName == get(self()).data.displayName && e.createdAt == request.time; }
+   function validReport(r) { let c=get(/databases/$(database)/documents/chats/$(r.chatId)).data; let m=get(/databases/$(database)/documents/chats/$(r.chatId)/messages/$(r.messageId)).data;
+    return r.keys().hasOnly(['departmentId','chatId','messageId','messageBody','senderId','senderName','messageCreatedAt','messageUpdatedAt','reporterId','reporterName','reason','hodSubject','targetRole','state','decisionNote','revision','createdAt','updatedAt','updatedBy'])
+     && chatAccess(c) && r.departmentId == c.departmentId && m.removed == false && m.senderId != request.auth.uid
+     && r.messageBody == m.body && r.senderId == m.senderId && r.senderName == m.senderName && r.messageCreatedAt == m.createdAt && r.messageUpdatedAt == m.updatedAt
+     && r.reporterId == request.auth.uid && r.reporterName == get(self()).data.displayName && r.reason is string && r.reason.trim().size() >= 3 && r.reason.size() <= 2000
+     && r.hodSubject is bool && (get(/databases/$(database)/documents/staff/$(m.senderId)).data.role != 'hod' && role() != 'hod' || r.hodSubject == true)
+     && r.targetRole == (r.hodSubject ? 'admin' : 'hod') && r.state == 'Reported' && r.decisionNote == '' && r.createdAt == request.time && validReportAudit(r); }
+   allow read: if reportReader(resource.data);
+   allow create: if active() && validReport(request.resource.data);
+   allow update: if reportReviewer(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','targetRole','decisionNote','revision','updatedAt','updatedBy'])
+    && request.resource.data.state in ['Under review','Closed','Escalated'] && request.resource.data.decisionNote is string && request.resource.data.decisionNote.trim().size() >= 3 && request.resource.data.decisionNote.size() <= 2000
+    && (request.resource.data.state != resource.data.state || request.resource.data.decisionNote != resource.data.decisionNote)
+    && (request.resource.data.state == 'Escalated' ? role() == 'hod' && resource.data.targetRole == 'hod' && request.resource.data.targetRole == 'admin' : request.resource.data.targetRole == resource.data.targetRole)
+    && validReportAudit(request.resource.data);
+   allow delete: if false;
+   match /history/{eventId} {
+    allow read: if reportReader(get(reportPath()).data);
+    allow create: if active() && request.resource.data.keys().hasOnly(['state','targetRole','note','actorId','actorName','createdAt'])
+     && (!exists(reportPath()) ? getAfter(reportPath()).data.reporterId == request.auth.uid : reportReviewer(get(reportPath()).data))
+     && getAfter(reportPath()).data.revision == eventId && getAfter(reportPath()).data.updatedAt == request.time && getAfter(reportPath()).data.updatedBy == request.auth.uid
+     && request.resource.data.state == getAfter(reportPath()).data.state && request.resource.data.targetRole == getAfter(reportPath()).data.targetRole
+     && request.resource.data.note == (!exists(reportPath()) ? getAfter(reportPath()).data.reason : getAfter(reportPath()).data.decisionNote)
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
+  }
   function self() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
   function active() { return signedIn() && exists(self()) && get(self()).data.active == true && get(self()).data.role in ['admin','hod','lecturer']; }
   function role() { return get(self()).data.role; }
