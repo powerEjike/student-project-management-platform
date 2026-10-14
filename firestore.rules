@@ -202,6 +202,7 @@ service cloud.firestore {
    allow read: if hod(resource.data.departmentId);
    function caseData() { return getAfter(/databases/$(database)/documents/projects/$(request.resource.data.projectId)/integrityCases/$(request.resource.data.caseId)).data; }
    allow create,update: if request.resource.data.keys().hasOnly(['departmentId','projectId','caseId','state','referredByName','createdAt','updatedAt'])
+    && (!exists(/databases/$(database)/documents/integrityInbox/$(iid)) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','updatedAt']))
     && iid == request.resource.data.projectId + '__' + request.resource.data.caseId
     && request.resource.data.departmentId == get(projectPath(request.resource.data.projectId)).data.departmentId
     && (hod(request.resource.data.departmentId) || feedbackWriter(get(projectPath(request.resource.data.projectId)).data))
