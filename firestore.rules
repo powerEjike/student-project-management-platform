@@ -16,10 +16,12 @@ service cloud.firestore {
      && r.reporterId == request.auth.uid && r.reporterName == get(self()).data.displayName && r.reason is string && r.reason.trim().size() >= 3 && r.reason.size() <= 2000
      && r.hodSubject is bool && (get(/databases/$(database)/documents/staff/$(m.senderId)).data.role != 'hod' && role() != 'hod' || r.hodSubject == true)
      && r.targetRole == (r.hodSubject ? 'admin' : 'hod') && r.state == 'Reported' && r.decisionNote == '' && r.createdAt == request.time && validReportAudit(r); }
+   function removedMessage(r) { let path=/databases/$(database)/documents/chats/$(r.chatId)/messages/$(r.messageId); let m=getAfter(path).data; return role() == 'admin' && resource.data.targetRole == 'admin' && resource.data.state == 'Under review'
+    && get(path).data.removed == false && m.removed == true && m.body == '' && m.moderationReportId == reportId && m.updatedAt == request.time; }
    allow read: if reportReader(resource.data);
    allow create: if active() && validReport(request.resource.data);
-   allow update: if reportReviewer(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','targetRole','decisionNote','revision','updatedAt','updatedBy'])
-    && request.resource.data.state in ['Under review','Closed','Escalated'] && request.resource.data.decisionNote is string && request.resource.data.decisionNote.trim().size() >= 3 && request.resource.data.decisionNote.size() <= 2000
+   allow update: if reportReviewer(resource.data) && resource.data.state != 'Message removed' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','targetRole','decisionNote','revision','updatedAt','updatedBy'])
+    && request.resource.data.state in ['Under review','Closed','Escalated','Message removed'] && (request.resource.data.state != 'Message removed' || removedMessage(request.resource.data)) && request.resource.data.decisionNote is string && request.resource.data.decisionNote.trim().size() >= 3 && request.resource.data.decisionNote.size() <= 2000
     && (request.resource.data.state != resource.data.state || request.resource.data.decisionNote != resource.data.decisionNote)
     && (request.resource.data.state == 'Escalated' ? role() == 'hod' && resource.data.targetRole == 'hod' && request.resource.data.targetRole == 'admin' : request.resource.data.targetRole == resource.data.targetRole)
     && validReportAudit(request.resource.data);
@@ -639,13 +641,19 @@ service cloud.firestore {
    allow update,delete: if false;
    match /messages/{mid} {
     function parent() { return get(/databases/$(database)/documents/chats/$(cid)).data; }
+    function moderatedRemoval() { let rid=request.resource.data.moderationReportId; let path=/databases/$(database)/documents/chatReports/$(rid); let before=get(path).data; let after=getAfter(path).data;
+     return active() && role() == 'admin' && rid is string && rid.matches('[a-zA-Z0-9_-]{1,128}') && before.targetRole == 'admin' && before.state == 'Under review'
+      && before.chatId == cid && before.messageId == mid && before.departmentId == parent().departmentId && before.senderId == resource.data.senderId && before.senderName == resource.data.senderName
+      && before.messageBody == resource.data.body && before.messageCreatedAt == resource.data.createdAt && before.messageUpdatedAt == resource.data.updatedAt && resource.data.removed == false
+      && after.state == 'Message removed' && after.updatedBy == request.auth.uid && after.updatedAt == request.time && after.revision != before.revision
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt','moderationReportId']) && request.resource.data.body == '' && request.resource.data.removed == true && request.resource.data.updatedAt == request.time; }
     function validMessage(m) { return m.body is string && m.body.size() <= 4000 && m.removed is bool && m.announcement is bool && (m.removed ? m.body == '' : m.body.trim().size() > 0) && (!m.announcement || (role() == 'hod' && parent().kind == 'general')); }
     allow read: if chatAccess(parent());
     allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','projectRefId','createdAt','updatedAt'])
      && request.resource.data.senderId == request.auth.uid && request.resource.data.senderName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.removed == false && validMessage(request.resource.data)
      && (request.resource.data.get('projectRefId','') == '' || (request.resource.data.projectRefId == mid && getAfter(/databases/$(database)/documents/chats/$(cid)/projectReferences/$(mid)).data.createdBy == request.auth.uid));
-    allow update: if chatAccess(parent()) && resource.data.senderId == request.auth.uid && resource.data.removed == false
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt']) && request.resource.data.updatedAt == request.time && validMessage(request.resource.data);
+    allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny(['moderationReportId']) ? moderatedRemoval() : (chatAccess(parent()) && resource.data.senderId == request.auth.uid && resource.data.removed == false
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt']) && request.resource.data.updatedAt == request.time && validMessage(request.resource.data));
     allow delete: if false;
    }
    match /projectReferences/{mid} {

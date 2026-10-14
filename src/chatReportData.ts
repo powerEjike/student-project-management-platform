@@ -1,3 +1,4 @@
-export const chatReportStates=['Reported','Under review','Closed','Escalated'] as const;
+export const chatReportStates=['Reported','Under review','Closed','Escalated','Message removed'] as const;
 export function reportReason(value:string){const reason=value.trim();if(reason.length<3||reason.length>2000)throw Error('Explain the concern in 3 to 2,000 characters.');return reason;}
 export function reportDecision(state:string,note:string,targetRole:string,role:string){note=reportReason(note);if(!['Under review','Closed','Escalated'].includes(state)||!['hod','admin'].includes(role)||targetRole!==role||state==='Escalated'&&role!=='hod')throw Error('Choose an available review decision.');return{state,decisionNote:note,targetRole:state==='Escalated'?'admin':targetRole};}
+export function moderationValue(state:string,targetRole:string,role:string,note:string,confirmed:boolean){if(role!=='admin'||targetRole!=='admin'||state!=='Under review'||!confirmed)throw Error('The Super Admin must review this report and explicitly confirm removal.');return{state:'Message removed',targetRole:'admin',decisionNote:reportReason(note)};}
