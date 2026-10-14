@@ -171,6 +171,33 @@ service cloud.firestore {
    allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
    allow delete: if false;
   }
+  match /meetingMinimums/{dept}/sessions/{sid} {
+   function manager() { return active() && (role() == 'admin' || hod(dept)); }
+   function policyPath() { return /databases/$(database)/documents/meetingMinimums/$(dept)/sessions/$(sid); }
+   function auditPath(eid) { return /databases/$(database)/documents/meetingMinimums/$(dept)/sessions/$(sid)/history/$(eid); }
+   function previousMinimum() { return exists(policyPath()) ? get(policyPath()).data.minimum : null; }
+   allow get: if active() && (role() == 'admin' || same(dept));
+   allow list,delete: if false;
+   allow create,update: if manager() && exists(/databases/$(database)/documents/departments/$(dept))
+    && request.resource.data.keys().hasOnly(['session','minimum','note','revision','updatedBy','updatedAt'])
+    && request.resource.data.session is string && request.resource.data.session.matches('[0-9]{4}/[0-9]{4}')
+    && sid == request.resource.data.session.replace('/','-') && int(request.resource.data.session.split('/')[1]) == int(request.resource.data.session.split('/')[0]) + 1
+    && request.resource.data.minimum is int && request.resource.data.minimum >= 0 && request.resource.data.minimum <= 1000 && request.resource.data.minimum != previousMinimum()
+    && request.resource.data.note is string && request.resource.data.note.trim().size() > 0 && request.resource.data.note.size() <= 500
+    && text(request.resource.data.revision,128) && !exists(auditPath(request.resource.data.revision))
+    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+    && getAfter(auditPath(request.resource.data.revision)).data.diff(request.resource.data).affectedKeys().hasOnly(['previousMinimum','actorName'])
+    && getAfter(auditPath(request.resource.data.revision)).data.previousMinimum == previousMinimum()
+    && getAfter(auditPath(request.resource.data.revision)).data.actorName == get(self()).data.displayName;
+   match /history/{eid} {
+    allow read: if manager();
+    allow create: if manager() && request.resource.data.keys().hasOnly(['session','minimum','note','revision','updatedBy','updatedAt','previousMinimum','actorName'])
+     && request.resource.data.diff(getAfter(policyPath()).data).affectedKeys().hasOnly(['previousMinimum','actorName'])
+     && getAfter(policyPath()).data.revision == eid && request.resource.data.revision == eid && request.resource.data.previousMinimum == previousMinimum()
+     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time && request.resource.data.actorName == get(self()).data.displayName;
+    allow update,delete: if false;
+   }
+  }
   match /departmentRubrics/{id} {
    allow read: if active() && (role() == 'admin' || same(id));
    allow create,update: if active() && role() == 'admin' && exists(/databases/$(database)/documents/departments/$(id))
