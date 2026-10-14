@@ -56,7 +56,7 @@ service cloud.firestore {
   function rubricDistinct(cs,i) { return cs.size() <= i || (cs[i].name.trim().lower() != cs[0].name.trim().lower() && (i <= 1 || cs[i].name.trim().lower() != cs[1].name.trim().lower()) && (i <= 2 || cs[i].name.trim().lower() != cs[2].name.trim().lower()) && (i <= 3 || cs[i].name.trim().lower() != cs[3].name.trim().lower())); }
   function rubricValid(cs) { return cs is list && cs.size() >= 1 && cs.size() <= 5 && rubricItem(cs,0) && rubricItem(cs,1) && rubricItem(cs,2) && rubricItem(cs,3) && rubricItem(cs,4) && rubricDistinct(cs,1) && rubricDistinct(cs,2) && rubricDistinct(cs,3) && rubricDistinct(cs,4); }
   function scoreItem(cs,ss,i) { return cs.size() <= i || (ss[i] is int && ss[i] >= 0 && ss[i] <= cs[i].maximum); }
-  function feedbackWriter(p) { return access(p) && role() == 'lecturer' && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
+  function feedbackWriter(p) { let s=get(self()).data; return signedIn() && s.active == true && s.role == 'lecturer' && s.departmentId == p.departmentId && (p.supervisorId == request.auth.uid || p.get('coSupervisorId','') == request.auth.uid) && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
   function validFeedback(f,p) { return f.keys().hasOnly(['category','priority','milestoneKey','milestoneName','comment','summary','actorId','actorName','createdAt'])
    && f.category in ['Content','Methodology','Referencing','Language','Formatting'] && f.priority in ['Action required','Suggestion','Positive feedback']
    && f.comment is string && f.comment.trim().size() > 0 && f.comment.size() <= 2000 && f.summary is string && f.summary.size() <= 2000
