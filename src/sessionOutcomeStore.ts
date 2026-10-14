@@ -1,0 +1,7 @@
+import {doc,getDocFromServer,getFirestore} from 'firebase/firestore';import {app} from './firebase';import type{Project,Student}from'./models';import type{SessionCheck}from'./sessionOutcomeData';
+const db=getFirestore(app!);
+export async function checkSessionOutcomes(students:Student[],departmentId:string,uid:string,session:string,progress:(done:number,total:number)=>void,cancelled:()=>boolean){
+ async function access(){const p=(await getDocFromServer(doc(db,'staff',uid))).data();if(!p?.active||p.role!=='hod'||p.departmentId!==departmentId)throw Error('Only the current department HOD can prepare this report.');}
+ if(!session)throw Error('Select an academic session.');await access();const roster=students.filter(s=>s.departmentId===departmentId&&s.session===session);if(roster.length>1000)throw Error('This report supports up to 1,000 student records per session.');const checks:Record<string,SessionCheck>={};let cursor=0,done=0;
+ await Promise.all(Array.from({length:Math.min(4,roster.length)},async()=>{while(cursor<roster.length&&!cancelled()){const student=roster[cursor++];try{const snap=await getDocFromServer(doc(db,'projects',student.id));const project=snap.exists()?{id:snap.id,...snap.data()}as Project:null;if(project&&(project.departmentId!==departmentId||project.studentId!==student.id))throw Error('Project scope mismatch.');checks[student.id]={verified:true,project};}catch{checks[student.id]={verified:false,project:null};}done++;progress(done,roster.length);}}));if(cancelled())throw Error('Report check stopped.');await access();return checks;
+}
