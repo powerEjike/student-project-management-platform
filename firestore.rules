@@ -314,6 +314,36 @@ service cloud.firestore {
     allow update,delete: if false;
    }
 
+   match /integrityCases/{cid} {
+    function casePath() { return /databases/$(database)/documents/projects/$(id)/integrityCases/$(cid); }
+    function eventPath(eid) { return /databases/$(database)/documents/projects/$(id)/integrityCases/$(cid)/history/$(eid); }
+    function caseAudit(c,previous,note) { let e=getAfter(eventPath(c.lastEventId)).data; return text(c.lastEventId,128) && !exists(eventPath(c.lastEventId))
+     && e == {'state':c.state,'previousState':previous,'note':note,'actorId':request.auth.uid,'actorName':get(self()).data.displayName,'createdAt':request.time}; }
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if feedbackWriter(get(projectPath(id)).data)
+     && request.resource.data.keys().hasOnly(['concern','evidence','state','decisionNote','referredBy','referredByName','createdAt','updatedAt','updatedBy','lastEventId'])
+     && request.resource.data.concern is string && request.resource.data.concern.trim().size() > 0 && request.resource.data.concern.size() <= 2000
+     && request.resource.data.evidence is string && request.resource.data.evidence.trim().size() > 0 && request.resource.data.evidence.size() <= 4000
+     && request.resource.data.state == 'Referred' && request.resource.data.decisionNote == ''
+     && request.resource.data.referredBy == request.auth.uid && request.resource.data.referredByName == get(self()).data.displayName
+     && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid
+     && caseAudit(request.resource.data,'',request.resource.data.concern);
+    allow update: if hod(get(projectPath(id)).data.departmentId)
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state','decisionNote','updatedBy','updatedAt','lastEventId'])
+     && ((resource.data.state == 'Referred' && request.resource.data.state == 'Under review')
+      || (resource.data.state == 'Under review' && request.resource.data.state in ['Cleared','Action taken'])
+      || (resource.data.state in ['Cleared','Action taken'] && request.resource.data.state == 'Under review'))
+     && request.resource.data.decisionNote is string && request.resource.data.decisionNote.trim().size() > 0 && request.resource.data.decisionNote.size() <= 2000
+     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+     && caseAudit(request.resource.data,resource.data.state,request.resource.data.decisionNote);
+    allow delete: if false;
+    match /history/{eid} {
+     allow read: if access(get(projectPath(id)).data);
+     allow create: if access(get(projectPath(id)).data) && getAfter(casePath()).data.lastEventId == eid
+      && request.resource.data == {'state':getAfter(casePath()).data.state,'previousState':exists(casePath())?get(casePath()).data.state:'','note':exists(casePath())?getAfter(casePath()).data.decisionNote:getAfter(casePath()).data.concern,'actorId':request.auth.uid,'actorName':get(self()).data.displayName,'createdAt':request.time};
+     allow update,delete: if false;
+    }
+   }
    match /scoredReviews/{rid} {
     function currentRubric() { return get(/databases/$(database)/documents/departmentRubrics/$(get(projectPath(id)).data.departmentId)).data; }
     allow read: if access(get(projectPath(id)).data);
