@@ -498,18 +498,26 @@ service cloud.firestore {
     match /annotations/{aid} {
      function rectangleValue(r,maxX,maxY) { let x=r.x; let y=r.y; let w=r.width; let h=r.height; return r.keys().hasOnly(['x','y','width','height']) && x is number && y is number && w is number && h is number && x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= maxX + 0.1 && y + h <= maxY + 0.1; }
      function rect(a,i) { return a.rects.size() <= i || rectangleValue(a.rects[i],a.pageWidth,a.pageHeight); }
-     function validAnchor(a) { return a.keys().hasOnly(['anchorKind','page','pageWidth','pageHeight','rects','quote','comment','category','severity','actorId','actorName','createdAt'])
+     function validAnchor(a) { return a.keys().hasOnly(['anchorKind','page','pageWidth','pageHeight','rects','quote','comment','category','severity','actorId','actorName','createdAt','sourceHash','sourceRemarkId','sourceRootId'])
       && a.anchorKind in ['Text','Area'] && a.page is int && a.page >= 1 && a.page <= getAfter(reviewPath()).data.pages
       && a.pageWidth is number && a.pageWidth > 0 && a.pageWidth <= 20000 && a.pageHeight is number && a.pageHeight > 0 && a.pageHeight <= 20000
       && a.rects is list && a.rects.size() >= 1 && a.rects.size() <= 4 && rect(a,0) && rect(a,1) && rect(a,2) && rect(a,3)
       && a.quote is string && a.quote.trim().size() > 0 && a.quote.size() <= 1000 && a.severity in ['Major correction','Suggestion','Good point']
       && a.actorId == request.auth.uid && a.actorName == get(self()).data.displayName && a.createdAt == request.time; }
+     function validSource(a) { let source=get(/databases/$(database)/documents/projects/$(id)/documentReviews/$(a.sourceHash)/annotations/$(a.sourceRemarkId)).data;
+      let response=/databases/$(database)/documents/projects/$(id)/feedback/$(a.sourceRemarkId)/followUp/current;
+      return a.sourceHash is string && a.sourceHash.matches('[a-f0-9]{64}') && a.sourceHash != hash
+       && a.sourceRemarkId is string && a.sourceRemarkId.matches('[a-zA-Z0-9_-]{1,194}') && a.sourceRootId is string && a.sourceRootId.matches('[a-zA-Z0-9_-]{1,128}')
+       && a.sourceRootId == source.get('sourceRootId',a.sourceRemarkId) && aid == hash + '__' + a.sourceRootId
+       && a.comment == source.comment && a.category == source.category && a.severity == source.severity && source.severity != 'Good point'
+       && (!existsAfter(response) || getAfter(response).data.state != 'Addressed'); }
      function matchingFeedback(a) { let f=getAfter(/databases/$(database)/documents/projects/$(id)/feedback/$(aid)).data; return f.comment == a.comment && f.category == a.category
       && f.priority == (a.severity == 'Major correction' ? 'Action required' : a.severity == 'Good point' ? 'Positive feedback' : 'Suggestion')
       && f.actorId == a.actorId && f.actorName == a.actorName && f.createdAt == request.time && f.milestoneKey == ''
       && f.summary == 'PDF review: ' + getAfter(reviewPath()).data.fileName + ', page ' + string(a.page); }
      allow read: if access(get(projectPath(id)).data);
      allow create: if feedbackWriter(get(projectPath(id)).data) && hash.matches('[a-f0-9]{64}') && validAnchor(request.resource.data) && matchingFeedback(request.resource.data)
+      && (!request.resource.data.keys().hasAny(['sourceHash','sourceRemarkId','sourceRootId']) || validSource(request.resource.data))
       && getAfter(projectPath(id)).data.lastFeedbackEventId == aid && getAfter(projectPath(id)).data.lastFeedbackBy == request.auth.uid && getAfter(projectPath(id)).data.lastFeedbackAt == request.time;
      allow update,delete: if false;
     }
