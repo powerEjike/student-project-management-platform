@@ -496,7 +496,8 @@ service cloud.firestore {
      && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
     allow update,delete: if false;
     match /annotations/{aid} {
-     function rect(a,i) { return a.rects.size() <= i || (a.rects[i].keys().hasOnly(['x','y','width','height']) && a.rects[i].x is number && a.rects[i].y is number && a.rects[i].width is number && a.rects[i].height is number && a.rects[i].x >= 0 && a.rects[i].y >= 0 && a.rects[i].width > 0 && a.rects[i].height > 0 && a.rects[i].x + a.rects[i].width <= a.pageWidth + 0.1 && a.rects[i].y + a.rects[i].height <= a.pageHeight + 0.1); }
+     function rectangleValue(r,maxX,maxY) { let x=r.x; let y=r.y; let w=r.width; let h=r.height; return r.keys().hasOnly(['x','y','width','height']) && x is number && y is number && w is number && h is number && x >= 0 && y >= 0 && w > 0 && h > 0 && x + w <= maxX + 0.1 && y + h <= maxY + 0.1; }
+     function rect(a,i) { return a.rects.size() <= i || rectangleValue(a.rects[i],a.pageWidth,a.pageHeight); }
      function validAnchor(a) { return a.keys().hasOnly(['anchorKind','page','pageWidth','pageHeight','rects','quote','comment','category','severity','actorId','actorName','createdAt'])
       && a.anchorKind in ['Text','Area'] && a.page is int && a.page >= 1 && a.page <= getAfter(reviewPath()).data.pages
       && a.pageWidth is number && a.pageWidth > 0 && a.pageWidth <= 20000 && a.pageHeight is number && a.pageHeight > 0 && a.pageHeight <= 20000
