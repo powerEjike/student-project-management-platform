@@ -23,3 +23,5 @@ button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.st
 @media(max-width:1000px){.document-review-layout{grid-template-columns:1fr}.document-remarks{max-height:none}.pdf-scroll{max-height:65vh}}
 
 .pdf-highlight.pending{background:#3292e0;border:1px solid #175f97;opacity:.2}
+
+.comparison-columns{display:grid;grid-template-columns:1fr 1fr;gap:18px;min-width:0}.comparison-columns>div{min-width:0}.comparison-columns .pdf-scroll{max-height:65vh}.comparison-diff{padding:16px;line-height:1.9;max-height:50vh;overflow:auto;overflow-wrap:anywhere;border:1px solid #dbe5df}.comparison-added{background:#d7f1df;color:#174c29}.comparison-removed{background:#fbe1df;color:#7a2420}.comparison-added ins{text-decoration:none}.comparison-diff span{white-space:pre-wrap}@media(max-width:1000px){.comparison-columns{grid-template-columns:1fr}}
