@@ -1,4 +1,5 @@
 export type Criterion={name:string;maximum:number};
+export function rubricStage(key:string,milestones:Record<string,{name:string}>={}){if(key&&!milestones[key])throw Error('This review stage is no longer available. Choose a current milestone.');return {milestoneKey:key,milestoneName:key?milestones[key].name:'Overall project'};}
 export function rubricCriteria(rows:Criterion[]){
  if(!rows.length||rows.length>5)throw Error('Configure between one and five criteria.');
  const result=rows.map(row=>({name:row.name.trim(),maximum:Number(row.maximum)}));
