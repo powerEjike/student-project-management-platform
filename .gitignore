@@ -6,4 +6,5 @@ out/
 .firebase/
 *-debug.log
 dist/
+public/pdfjs/
 *.tsbuildinfo

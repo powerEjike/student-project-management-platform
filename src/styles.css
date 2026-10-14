@@ -7,3 +7,19 @@
 button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.stat-card[aria-pressed=true]{border-color:#244f3d;background:#f0f5ec}button.stat-card:focus-visible{outline:3px solid #a6c79a;outline-offset:3px}
 
 .quick-progress form{min-width:240px;max-width:360px;padding:12px;border:1px solid var(--border,#dce5df);border-radius:10px;margin-top:10px;white-space:normal}.quick-progress label{display:block;margin:8px 0}.quick-progress textarea{min-height:72px}.quick-progress small{white-space:normal}
+.document-review-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:20px;margin-top:18px;align-items:start}
+.pdf-scroll{overflow:auto;max-height:75vh;border:1px solid #dce4df;background:#edf1ee;padding:3px}
+.local-pdf-page{position:relative;background:white;isolation:isolate}
+.local-pdf-page canvas{display:block}
+.local-pdf-page .textLayer{z-index:2}
+.local-pdf-page.area-selection{touch-action:none;cursor:crosshair;user-select:none}
+.local-pdf-page.area-selection .textLayer{pointer-events:none}
+.pdf-highlight-layer{position:absolute;inset:0;pointer-events:none;z-index:1}
+.pdf-highlight{position:absolute;opacity:.27}
+.pdf-highlight.major{background:#e33333}.pdf-highlight.suggestion{background:#ffbe19}.pdf-highlight.positive{background:#26a358}
+.document-remarks{max-height:85vh;overflow:auto;padding:0 4px}
+.pdf-remark{border-top:1px solid #dce4df;padding:16px 0}.pdf-remark>strong{display:block;margin-top:8px}
+.pdf-remark blockquote{border-left:3px solid #c3d6ca;padding-left:12px;margin:12px 0;color:#4b6358}
+@media(max-width:1000px){.document-review-layout{grid-template-columns:1fr}.document-remarks{max-height:none}.pdf-scroll{max-height:65vh}}
+
+.pdf-highlight.pending{background:#3292e0;border:1px solid #175f97;opacity:.2}

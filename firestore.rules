@@ -58,7 +58,7 @@ service cloud.firestore {
   function scoreItem(cs,ss,i) { return cs.size() <= i || (ss[i] is int && ss[i] >= 0 && ss[i] <= cs[i].maximum); }
   function feedbackWriter(p) { return access(p) && role() == 'lecturer' && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
   function validFeedback(f,p) { return f.keys().hasOnly(['category','priority','milestoneKey','milestoneName','comment','summary','actorId','actorName','createdAt'])
-   && f.category in ['Content','Methodology','Referencing','Language','Formatting'] && f.priority in ['Action required','Suggestion']
+   && f.category in ['Content','Methodology','Referencing','Language','Formatting'] && f.priority in ['Action required','Suggestion','Positive feedback']
    && f.comment is string && f.comment.trim().size() > 0 && f.comment.size() <= 2000 && f.summary is string && f.summary.size() <= 2000
    && f.milestoneKey is string && ((f.milestoneKey == '' && f.milestoneName == 'Overall project') || (f.milestoneKey in p.get('milestones',{}) && f.milestoneName == p.milestones[f.milestoneKey].name))
    && f.actorId == request.auth.uid && f.actorName == get(self()).data.displayName && f.createdAt == request.time; }
@@ -483,6 +483,34 @@ service cloud.firestore {
     function validSummary() { let n=request.resource.data; let b=exists(contactSummaryPath(id)) ? get(contactSummaryPath(id)).data : {'total':0,'lastMeeting':'','lastContact':'','lastAttempt':''}; let c=getAfter(/databases/$(database)/documents/projects/$(id)/contacts/$(n.lastEventId)).data;
      return n.keys().hasOnly(['total','lastMeeting','lastContact','lastAttempt','lastEventId','updatedBy','updatedAt']) && text(n.lastEventId,128) && !exists(/databases/$(database)/documents/projects/$(id)/contacts/$(n.lastEventId)) && validContact(c)
       && n.total == b.total+1 && n.lastMeeting == (c.channel == 'Meeting' && c.outcome == 'Contacted' && c.date > b.lastMeeting ? c.date : b.lastMeeting) && n.lastContact == (c.outcome == 'Contacted' && c.date > b.lastContact ? c.date : b.lastContact) && n.lastAttempt == (c.date > b.lastAttempt ? c.date : b.lastAttempt) && n.updatedBy == request.auth.uid && n.updatedAt == request.time;
+    }
+   }
+   match /documentReviews/{hash} {
+    function reviewPath() { return /databases/$(database)/documents/projects/$(id)/documentReviews/$(hash); }
+    allow read: if access(get(projectPath(id)).data);
+    allow create: if feedbackWriter(get(projectPath(id)).data) && hash.matches('[a-f0-9]{64}')
+     && request.resource.data.keys().hasOnly(['fileName','size','pages','createdBy','createdAt'])
+     && request.resource.data.fileName is string && request.resource.data.fileName.trim().size() > 0 && request.resource.data.fileName.size() <= 200
+     && request.resource.data.size is int && request.resource.data.size >= 1 && request.resource.data.size <= 20971520
+     && request.resource.data.pages is int && request.resource.data.pages >= 1 && request.resource.data.pages <= 100
+     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+    match /annotations/{aid} {
+     function rect(a,i) { return a.rects.size() <= i || (a.rects[i].keys().hasOnly(['x','y','width','height']) && a.rects[i].x is number && a.rects[i].y is number && a.rects[i].width is number && a.rects[i].height is number && a.rects[i].x >= 0 && a.rects[i].y >= 0 && a.rects[i].width > 0 && a.rects[i].height > 0 && a.rects[i].x + a.rects[i].width <= a.pageWidth + 0.1 && a.rects[i].y + a.rects[i].height <= a.pageHeight + 0.1); }
+     function validAnchor(a) { return a.keys().hasOnly(['anchorKind','page','pageWidth','pageHeight','rects','quote','comment','category','severity','actorId','actorName','createdAt'])
+      && a.anchorKind in ['Text','Area'] && a.page is int && a.page >= 1 && a.page <= getAfter(reviewPath()).data.pages
+      && a.pageWidth is number && a.pageWidth > 0 && a.pageWidth <= 20000 && a.pageHeight is number && a.pageHeight > 0 && a.pageHeight <= 20000
+      && a.rects is list && a.rects.size() >= 1 && a.rects.size() <= 16 && rect(a,0) && rect(a,1) && rect(a,2) && rect(a,3) && rect(a,4) && rect(a,5) && rect(a,6) && rect(a,7) && rect(a,8) && rect(a,9) && rect(a,10) && rect(a,11) && rect(a,12) && rect(a,13) && rect(a,14) && rect(a,15)
+      && a.quote is string && a.quote.trim().size() > 0 && a.quote.size() <= 1000 && a.severity in ['Major correction','Suggestion','Good point']
+      && a.actorId == request.auth.uid && a.actorName == get(self()).data.displayName && a.createdAt == request.time; }
+     function matchingFeedback(a) { let f=getAfter(/databases/$(database)/documents/projects/$(id)/feedback/$(aid)).data; return f.comment == a.comment && f.category == a.category
+      && f.priority == (a.severity == 'Major correction' ? 'Action required' : a.severity == 'Good point' ? 'Positive feedback' : 'Suggestion')
+      && f.actorId == a.actorId && f.actorName == a.actorName && f.createdAt == request.time && f.milestoneKey == ''
+      && f.summary == 'PDF review: ' + getAfter(reviewPath()).data.fileName + ', page ' + string(a.page); }
+     allow read: if access(get(projectPath(id)).data);
+     allow create: if feedbackWriter(get(projectPath(id)).data) && hash.matches('[a-f0-9]{64}') && validAnchor(request.resource.data) && matchingFeedback(request.resource.data)
+      && getAfter(projectPath(id)).data.lastFeedbackEventId == aid && getAfter(projectPath(id)).data.lastFeedbackBy == request.auth.uid && getAfter(projectPath(id)).data.lastFeedbackAt == request.time;
+     allow update,delete: if false;
     }
    }
    match /submissions/{submissionId} { allow read: if access(get(projectPath(id)).data); allow write: if false; }

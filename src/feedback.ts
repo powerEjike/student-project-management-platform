@@ -1,5 +1,5 @@
 export const feedbackCategories=['Content','Methodology','Referencing','Language','Formatting'] as const;
-export const feedbackPriorities=['Action required','Suggestion'] as const;
+export const feedbackPriorities=['Action required','Suggestion','Positive feedback'] as const;
 export type FeedbackInput={category:string;priority:string;milestoneKey:string;comment:string;summary:string};
 export function feedbackValue(input:FeedbackInput,milestones:Record<string,{name:string}>={}){
  if(!feedbackCategories.includes(input.category as typeof feedbackCategories[number])||!feedbackPriorities.includes(input.priority as typeof feedbackPriorities[number]))throw Error('Choose a valid feedback category and priority.');
