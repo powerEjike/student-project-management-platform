@@ -501,7 +501,7 @@ service cloud.firestore {
      function validAnchor(a) { return a.keys().hasOnly(['anchorKind','page','pageWidth','pageHeight','rects','quote','comment','category','severity','actorId','actorName','createdAt'])
       && a.anchorKind in ['Text','Area'] && a.page is int && a.page >= 1 && a.page <= getAfter(reviewPath()).data.pages
       && a.pageWidth is number && a.pageWidth > 0 && a.pageWidth <= 20000 && a.pageHeight is number && a.pageHeight > 0 && a.pageHeight <= 20000
-      && a.rects is list && a.rects.size() >= 1 && a.rects.size() <= 8 && rect(a,0) && rect(a,1) && rect(a,2) && rect(a,3) && rect(a,4) && rect(a,5) && rect(a,6) && rect(a,7)
+      && a.rects is list && a.rects.size() >= 1 && a.rects.size() <= 4 && rect(a,0) && rect(a,1) && rect(a,2) && rect(a,3)
       && a.quote is string && a.quote.trim().size() > 0 && a.quote.size() <= 1000 && a.severity in ['Major correction','Suggestion','Good point']
       && a.actorId == request.auth.uid && a.actorName == get(self()).data.displayName && a.createdAt == request.time; }
      function matchingFeedback(a) { let f=getAfter(/databases/$(database)/documents/projects/$(id)/feedback/$(aid)).data; return f.comment == a.comment && f.category == a.category
