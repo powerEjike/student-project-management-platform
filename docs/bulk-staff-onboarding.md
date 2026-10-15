@@ -1,5 +1,7 @@
 # Bulk staff onboarding
 
+Super Admins can use **Prepare staff onboarding** in the department setup workspace to enter, edit and review up to 100 rows, then download the JSON input below. They can also load a previously prepared JSON batch. All rows are shown for review. Preparation stays in the current tab; nothing is stored in Firestore or local storage. Reloading or leaving clears it. The downloaded file contains staff contact information and must be kept private. The screen does not check Authentication accounts or create access; the trusted operator still previews and applies the file using the command below.
+
 This trusted operator command creates up to 100 lecturer/HOD Authentication accounts and approved staff records. It uses application-default administrator credentials on the operator's computer. Keep credential files and real staff input outside the repository. It does not enable billing, send emails, generate passwords, verify email ownership or grant Super Admin access.
 
 Prepare a UTF-8 JSON file containing an array:
