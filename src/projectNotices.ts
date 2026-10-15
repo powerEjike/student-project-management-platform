@@ -1,5 +1,5 @@
 import type {Project,StaffProfile} from './models';import {upcomingMilestones} from './projectSummary.ts';
-export type ProjectNotice={key:string;projectId:string;studentId:string;kind:'deadline'|'topic'|'defence'|'release'|'feedback'|'submission';heading:string;detail:string;priority:number};
+export type ProjectNotice={key:string;projectId:string;studentId:string;kind:'deadline'|'topic'|'defence'|'release'|'feedback'|'submission'|'progress';heading:string;detail:string;priority:number};
 export function projectNotices(projects:Project[],profile:StaffProfile,uid:string,today:string){
  const rows:ProjectNotice[]=[];if(profile.role==='admin')return rows;
  for(const p of projects){if(p.departmentId!==profile.departmentId||profile.role!=='hod'&&p.supervisorId!==uid&&p.coSupervisorId!==uid||p.completedDate)continue;
