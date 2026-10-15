@@ -729,8 +729,11 @@ service cloud.firestore {
       && after.state == 'Message removed' && after.updatedBy == request.auth.uid && after.updatedAt == request.time && after.revision != before.revision
       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','removed','updatedAt','moderationReportId']) && request.resource.data.body == '' && request.resource.data.removed == true && request.resource.data.updatedAt == request.time; }
     function validMessage(m) { return m.body is string && m.body.size() <= 4000 && m.removed is bool && m.announcement is bool && (m.removed ? m.body == '' : m.body.trim().size() > 0) && (!m.announcement || (role() == 'hod' && parent().kind == 'general')); }
+    function validReply(m) { let rid=m.get('replyToId',''); return rid == '' || (rid is string && rid.matches('[a-zA-Z0-9_-]{1,128}') && rid != mid && m.announcement == false
+     && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(rid)).data.removed == false
+     && get(/databases/$(database)/documents/chats/$(cid)/messages/$(rid)).data.get('replyToId','') == ''); }
     allow read: if chatAccess(parent());
-    allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','projectRefId','createdAt','updatedAt'])
+    allow create: if chatAccess(parent()) && request.resource.data.keys().hasOnly(['body','senderId','senderName','removed','announcement','projectRefId','replyToId','createdAt','updatedAt']) && validReply(request.resource.data)
      && request.resource.data.senderId == request.auth.uid && request.resource.data.senderName == get(self()).data.displayName && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time && request.resource.data.removed == false && validMessage(request.resource.data)
      && (request.resource.data.get('projectRefId','') == '' || (request.resource.data.projectRefId == mid && getAfter(/databases/$(database)/documents/chats/$(cid)/projectReferences/$(mid)).data.createdBy == request.auth.uid));
     allow update: if request.resource.data.diff(resource.data).affectedKeys().hasAny(['moderationReportId']) ? moderatedRemoval() : (chatAccess(parent()) && resource.data.senderId == request.auth.uid && resource.data.removed == false

@@ -8,6 +8,13 @@ export function watchChats(departmentId:string,uid:string,receive:(rows:Chat[])=
 export function watchMessages(id:string,receive:(rows:ChatMessage[])=>void,fail:()=>void){return onSnapshot(query(collection(db,'chats',id,'messages'),orderBy('createdAt','desc')),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as ChatMessage))),fail);}
 export function watchChatRead(id:string,uid:string,receive:(state:ChatRead)=>void,fail:()=>void){return onSnapshot(doc(db,'chats',id,'readStates',uid),s=>receive(s.exists()?s.data() as ChatRead:{muted:false}),fail);}
 export async function saveChatRead(id:string,uid:string,lastReadAt:Timestamp|undefined,muted:boolean){await setDoc(doc(db,'chats',id,'readStates',uid),{lastReadAt:lastReadAt||new Timestamp(0,0),muted});}
-export async function sendChatMessage(id:string,body:string,announcement:boolean,senderName:string,projectId=''){const ref=doc(collection(db,'chats',id,'messages'));const uid=auth!.currentUser!.uid;const batch=writeBatch(db);batch.set(ref,{body:messageText(body),senderId:uid,senderName,announcement,removed:false,projectRefId:projectId?ref.id:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});if(projectId)batch.set(doc(db,'chats',id,'projectReferences',ref.id),{projectId,createdBy:uid,createdAt:serverTimestamp()});await batch.commit();}
+export async function sendChatMessage(id:string,body:string,announcement:boolean,senderName:string,projectId='',replyToId=''){
+ const ref=doc(collection(db,'chats',id,'messages'));const uid=auth!.currentUser!.uid;
+ await runTransaction(db,async tx=>{
+  if(replyToId){const original=await tx.get(doc(db,'chats',id,'messages',replyToId));if(!original.exists()||original.data().removed||original.data().replyToId)throw Error('The original message is unavailable for replies. Return to the conversation to send a new message.');if(announcement)throw Error('Replies cannot be pinned as announcements.');}
+  tx.set(ref,{body:messageText(body),senderId:uid,senderName,announcement,removed:false,projectRefId:projectId?ref.id:'',replyToId,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+  if(projectId)tx.set(doc(db,'chats',id,'projectReferences',ref.id),{projectId,createdBy:uid,createdAt:serverTimestamp()});
+ });
+}
 export function watchChatProject(chatId:string,referenceId:string,receive:(project:{id:string;title:string}|null)=>void){let offProject:(()=>void)|undefined;const offReference=onSnapshot(doc(db,'chats',chatId,'projectReferences',referenceId),s=>{offProject?.();receive(null);if(s.exists())offProject=onSnapshot(doc(db,'projects',s.data().projectId),p=>receive(p.exists()?{id:p.id,title:p.data().title}:null),()=>receive(null));},()=>{offProject?.();receive(null);});return()=>{offReference();offProject?.();};}
 export async function editChatMessage(id:string,messageId:string,body:string,removed=false){await updateDoc(doc(db,'chats',id,'messages',messageId),{body:removed?'':messageText(body),removed,updatedAt:serverTimestamp()});}

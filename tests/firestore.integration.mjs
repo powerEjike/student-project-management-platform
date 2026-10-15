@@ -1,4 +1,30 @@
 import {emptyContacts,nextContactSummary} from '../src/contact.ts';
+test('chat replies require a live same-conversation root, retain immutable targets and preserve private membership',async()=>{
+ const sup=env.authenticatedContext('sup').firestore(),co=env.authenticatedContext('co').firestore();const cid='reply-private';
+ await assertSucceeds(setDoc(doc(sup,'chats',cid),{departmentId:'dept-a',kind:'direct',name:'Synthetic reply conversation',memberIds:['sup','co'],createdBy:'sup',createdAt:serverTimestamp()}));
+ const message=(uid,replyToId='')=>({body:'Synthetic thread text',senderId:uid,senderName:uid,removed:false,announcement:false,replyToId,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(sup,'chats',cid,'messages','root'),message('sup')));
+ await assertSucceeds(setDoc(doc(co,'chats',cid,'messages','reply'),message('co','root')));
+ for(const [id,target]of[['missing-reply','missing'],['nested-reply','reply'],['self-reply','self-reply'],['invalid-path','root/child']])await assertFails(setDoc(doc(co,'chats',cid,'messages',id),message('co',target)));
+ for(const uid of['hod-a','admin','other','foreign','inactive-sup','unknown']){const db=env.authenticatedContext(uid).firestore();await assertFails(setDoc(doc(db,'chats',cid,'messages','unauthorized-'+uid),message(uid,'root')));await assertFails(getDoc(doc(db,'chats',cid,'messages','reply')));}
+ await assertSucceeds(setDoc(doc(sup,'chats','reply-other-chat'),{departmentId:'dept-a',kind:'direct',name:'Other synthetic conversation',memberIds:['sup','co'],createdBy:'sup',createdAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(co,'chats','reply-other-chat','messages','cross-chat'),message('co','root')));
+ await assertFails(setDoc(doc(co,'chats',cid,'messages','copied-content'),{...message('co','root'),replyBody:'Original snapshot'}));
+ await assertFails(setDoc(doc(co,'chats',cid,'messages','bad-type'),message('co',123)));
+ await assertFails(updateDoc(doc(co,'chats',cid,'messages','reply'),{replyToId:'',updatedAt:serverTimestamp()}));
+ const simultaneous=writeBatch(sup);simultaneous.update(doc(sup,'chats',cid,'messages','root'),{body:'',removed:true,updatedAt:serverTimestamp()});simultaneous.set(doc(sup,'chats',cid,'messages','reply-with-removal'),message('sup','root'));await assertFails(simultaneous.commit());
+ await assertSucceeds(updateDoc(doc(co,'chats',cid,'messages','reply'),{body:'Edited reply',updatedAt:serverTimestamp()}));
+ await assertSucceeds(updateDoc(doc(sup,'chats',cid,'messages','root'),{body:'',removed:true,updatedAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(co,'chats',cid,'messages','after-removal'),message('co','root')));
+ await assertSucceeds(getDoc(doc(co,'chats',cid,'messages','reply')));
+ await assertSucceeds(updateDoc(doc(co,'chats',cid,'messages','reply'),{body:'',removed:true,updatedAt:serverTimestamp()}));
+ // A legacy root without replyToId remains replyable. Announcements cannot be created as replies.
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'staff','reply-hod'),{role:'hod',departmentId:'dept-thread',active:true,displayName:'reply-hod'});await setDoc(doc(c.firestore(),'staff','reply-peer'),{role:'lecturer',departmentId:'dept-thread',active:true,displayName:'reply-peer'});});
+ const hod=env.authenticatedContext('reply-hod').firestore(),peer=env.authenticatedContext('reply-peer').firestore();await assertSucceeds(setDoc(doc(hod,'chats','general__dept-thread'),{departmentId:'dept-thread',kind:'general',name:'Department channel',memberIds:[],createdBy:'reply-hod',createdAt:serverTimestamp()}));
+ const legacy=message('reply-hod');delete legacy.replyToId;await assertSucceeds(setDoc(doc(hod,'chats','general__dept-thread','messages','legacy-reply-root'),legacy));
+ await assertSucceeds(setDoc(doc(peer,'chats','general__dept-thread','messages','legacy-child'),message('reply-peer','legacy-reply-root')));
+ await assertFails(setDoc(doc(hod,'chats','general__dept-thread','messages','pinned-reply'),{...message('reply-hod','legacy-reply-root'),announcement:true}));
+});
 test('submission receipts require atomic version heads, current assignments and immutable originals with audited corrections',async()=>{
  const id='submission-receipts';await seedWorkflow(id);await topicDecision(id);const hash='a'.repeat(64),db=env.authenticatedContext('sup').firestore();
  async function record(uid='sup',rid='one',changes={},options={}){const f=env.authenticatedContext(uid).firestore(),pref=doc(f,'projects',id),headRef=doc(pref,'submissionRegisters','stage_m0'),head=(await getDoc(headRef)).data(),batch=writeBatch(f);const data={fileName:'proposal.pdf',size:100,pages:2,sourceKind:'PDF',sourceHash:hash,reviewHash:hash,milestoneKey:'m0',milestoneName:'Proposal',registerId:'stage_m0',version:(head?.version||0)+1,previousReceiptId:head?.latestReceiptId||'',receivedOn:'2024-02-29',channel:'Email',note:'Synthetic received draft',actorId:uid,actorName:uid,createdAt:serverTimestamp(),...changes};batch.set(doc(pref,'submissionReceipts',rid),data);if(options.head!==false)batch.set(headRef,{latestReceiptId:rid,version:data.version,sourceHash:data.sourceHash,actorId:uid,updatedAt:serverTimestamp()});return batch.commit();}
