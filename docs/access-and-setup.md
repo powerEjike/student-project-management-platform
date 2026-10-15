@@ -77,6 +77,10 @@ Validation: synthetic UI verified matching-title block, no-match student form an
 The owner requested ProjectTrack in the URL. New primary address: https://projecttrack-biochemistry.web.app (the shorter projecttrack site ID was already reserved). Both new Hosting domains were added to Firebase Auth authorized domains and the existing restricted browser key's referrer allowlist; API targets and old domains are preserved. Firebase Hosting configuration deploys the same tested app to both addresses.
 
 
+## Bulk staff onboarding
+
+Trusted administrators can preview and create batches of lecturer/HOD accounts using `npm run staff:batch`. See [bulk staff onboarding](bulk-staff-onboarding.md) for the private input format, application-default credential requirements, audit behaviour and partial-failure recovery. No automated email is sent and existing access is never overwritten.
+
 ## Similar topic detection
 Topic checks now read active archive metadata within the signed-in staff member's department and rank exact matches first. Possible similar titles require at least three shared meaningful words and 65% coverage of the larger vocabulary; generic research words are excluded and words of six or more characters tolerate a single insertion, deletion or substitution. Reordered wording can match. Results are lexical similarity signals, not semantic, plagiarism or originality decisions.
 In supervisor registration, exact matches block entry; similar matches show shared terms and require explicit review before student fields appear. Saving checks the archive again and invalidates review if match identities change. Formal topic approval retains its separate supervisor decision flow. No new cloud services, billing or permissions were added.
