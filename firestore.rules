@@ -2,6 +2,23 @@ rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
   function signedIn() { return request.auth != null; }
+  match /repositoryNoticePolicies/{dept} {
+   function manager() { return active() && (role() == 'admin' || hod(dept)); }
+   function policyPath() { return /databases/$(database)/documents/repositoryNoticePolicies/$(dept); }
+   function validPolicy(r) { return r.keys().hasOnly(['title','body','reference','note','revision','updatedBy','updatedAt','actorName']) && text(r.title,120) && r.body is string && r.body.trim().size() > 0 && r.body.size() <= 8000 && text(r.reference,300) && r.note is string && r.note.trim().size() > 0 && r.note.size() <= 500
+    && text(r.revision,128) && r.updatedBy == request.auth.uid && r.actorName == get(self()).data.displayName && r.updatedAt == request.time; }
+   allow get: if active() && (role() == 'admin' || same(dept));
+   allow list,delete: if false;
+   allow create,update: if manager() && exists(/databases/$(database)/documents/departments/$(dept)) && validPolicy(request.resource.data)
+    && (!exists(policyPath()) || request.resource.data.title != resource.data.title || request.resource.data.body != resource.data.body || request.resource.data.reference != resource.data.reference)
+    && !exists(/databases/$(database)/documents/repositoryNoticePolicies/$(dept)/history/$(request.resource.data.revision))
+    && getAfter(/databases/$(database)/documents/repositoryNoticePolicies/$(dept)/history/$(request.resource.data.revision)).data == request.resource.data;
+   match /history/{editionId} {
+    allow read: if active() && (role() == 'admin' || same(dept));
+    allow create: if manager() && validPolicy(request.resource.data) && request.resource.data == getAfter(policyPath()).data && request.resource.data.revision == editionId;
+    allow update,delete: if false;
+   }
+  }
   function allocationRole(primaryId,coId,uid) { return primaryId == uid ? 'Primary supervisor' : (coId == uid ? 'Co-supervisor' : 'Not assigned'); }
   match /allocationSignals/{eventId} {
    function validSignal(s) { let p=getAfter(projectPath(s.projectId)).data; let path=/databases/$(database)/documents/projects/$(s.projectId)/allocations/$(eventId); let e=getAfter(path).data; return s.keys().hasOnly(['projectId','departmentId','createdBy','createdAt'])
@@ -598,6 +615,26 @@ service cloud.firestore {
      allow create: if feedbackWriter(get(projectPath(id)).data) && hash.matches('[a-f0-9]{64}') && validAnchor(request.resource.data) && matchingFeedback(request.resource.data)
       && (!request.resource.data.keys().hasAny(['sourceHash','sourceRemarkId','sourceRootId']) || validSource(request.resource.data))
       && getAfter(projectPath(id)).data.lastFeedbackEventId == aid && getAfter(projectPath(id)).data.lastFeedbackBy == request.auth.uid && getAfter(projectPath(id)).data.lastFeedbackAt == request.time;
+     allow update,delete: if false;
+    }
+   }
+   match /repositoryNotices/{noticeId} {
+    function noticePath() { return /databases/$(database)/documents/projects/$(id)/repositoryNotices/current; }
+    function writer() { let p=get(projectPath(id)).data; return noticeId == 'current' && (hod(p.departmentId) || primary(p)) && !p.keys().hasAny(['completedDate']) && p.get('releaseState','') != 'Withheld'; }
+    function validDelivery(r) { let p=get(projectPath(id)).data; let edition=get(/databases/$(database)/documents/repositoryNoticePolicies/$(p.departmentId)/history/$(r.policyRevision)).data;
+     return r.keys().hasOnly(['policyRevision','policyTitle','policyBody','policyReference','deliveredOn','channel','deliveryReference','reason','confirmedWritten','revision','recordedBy','actorName','recordedAt'])
+      && r.policyRevision == edition.revision && r.policyTitle == edition.title && r.policyBody == edition.body && r.policyReference == edition.reference
+      && receiptDetails(r.deliveredOn,'Email','') && r.channel in ['Email','Written handbook','Printed notice','Other written notice'] && text(r.deliveryReference,500) && r.reason is string && r.reason.trim().size() > 0 && r.reason.size() <= 500 && r.confirmedWritten == true
+      && text(r.revision,128) && r.recordedBy == request.auth.uid && r.actorName == get(self()).data.displayName && r.recordedAt == request.time; }
+    allow read: if noticeId == 'current' && access(get(projectPath(id)).data);
+    allow create,update: if writer() && validDelivery(request.resource.data)
+     && (!exists(noticePath()) || request.resource.data.policyRevision != resource.data.policyRevision || request.resource.data.deliveredOn != resource.data.deliveredOn || request.resource.data.channel != resource.data.channel || request.resource.data.deliveryReference != resource.data.deliveryReference)
+     && !exists(/databases/$(database)/documents/projects/$(id)/repositoryNotices/current/history/$(request.resource.data.revision))
+     && getAfter(/databases/$(database)/documents/projects/$(id)/repositoryNotices/current/history/$(request.resource.data.revision)).data == request.resource.data;
+    allow delete: if false;
+    match /history/{eventId} {
+     allow read: if noticeId == 'current' && access(get(projectPath(id)).data);
+     allow create: if writer() && validDelivery(request.resource.data) && request.resource.data == getAfter(noticePath()).data && request.resource.data.revision == eventId;
      allow update,delete: if false;
     }
    }
