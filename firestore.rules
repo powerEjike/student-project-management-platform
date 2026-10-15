@@ -455,6 +455,11 @@ service cloud.firestore {
    allow update,delete: if false;
   }
   match /students/{id} {
+   function emailValue(e) { return e is string && e.size() <= 254 && (e == '' || e.matches("[A-Za-z0-9!#$%&'*+/=?^_{|}~-]+(\\.[A-Za-z0-9!#$%&'*+/=?^_{|}~-]+)*@([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}")); }
+   function emailUpdate(r) { let event=/databases/$(database)/documents/students/$(id)/emailHistory/$(r.lastEmailEventId); let h=getAfter(event).data;
+    return r.diff(resource.data).affectedKeys().hasOnly(['email','lastEmailEventId','emailUpdatedBy','emailUpdatedAt']) && emailValue(r.email) && r.email != resource.data.email
+     && r.lastEmailEventId is string && r.lastEmailEventId.matches('[a-zA-Z0-9_-]{1,128}') && !exists(event) && r.emailUpdatedBy == request.auth.uid && r.emailUpdatedAt == request.time
+     && h.email == r.email && h.previousEmail == resource.data.email && h.actorId == request.auth.uid && h.createdAt == request.time; }
    allow get: if (active() && role() == 'admin') || (active() && role() == 'lecturer' && !exists(studentPath(id))) || (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
    allow list: if (active() && role() == 'admin') || hod(resource.data.departmentId);
    allow create: if ((active() && role() == 'admin') || hod(request.resource.data.departmentId) || lecturerNew(id)) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
@@ -468,7 +473,18 @@ service cloud.firestore {
     && request.resource.data.session.upper().replace('[^A-Z0-9]','').matches('[A-Z0-9]{1,80}')
     && id == request.resource.data.departmentId + '__' + request.resource.data.session.upper().replace('[^A-Z0-9]','') + '__' + request.resource.data.matricKey
     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
-   allow update,delete: if false;
+   allow update: if active() && role() == 'admin' && emailUpdate(request.resource.data);
+   allow delete: if false;
+   match /emailHistory/{eid} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin' && getAfter(studentPath(id)).data.lastEmailEventId == eid && getAfter(studentPath(id)).data.emailUpdatedAt == request.time
+     && getAfter(studentPath(id)).data.email != get(studentPath(id)).data.email
+     && request.resource.data.keys().hasOnly(['email','previousEmail','reason','confirmed','actorId','actorName','createdAt']) && emailValue(request.resource.data.email)
+     && request.resource.data.email == getAfter(studentPath(id)).data.email && request.resource.data.previousEmail == get(studentPath(id)).data.email
+     && request.resource.data.reason is string && request.resource.data.reason.trim().size() > 0 && request.resource.data.reason.size() <= 500 && request.resource.data.confirmed == true
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
   }
   match /projects/{id} {
    allow get: if hodStudent(id) || access(resource.data);

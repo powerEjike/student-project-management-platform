@@ -1,0 +1,11 @@
+# Student email maintenance
+
+Super Admin can load a department's current academic session in **Student email records**, optionally restricting to an exact programme. This reads a server snapshot of at most 500 student records; larger cohorts must be narrowed. Search, a missing/invalid-format filter and 25-row pages help locate a record. Coverage distinguishes missing, invalid-format and recorded addresses; it does not prove ownership or delivery.
+
+An address can be added, corrected or cleared after entering a reason and confirming the student identity was checked. One ASCII email address is accepted, with local/domain label checks and no recipient lists or injected headers. Clearing saves an empty address rather than deleting the student. The same format validator is used by reminder drafts. Existing malformed addresses can be corrected; original import metadata remains untouched.
+
+Saving is a transaction that checks the signed-in active Super Admin, current email and latest email event revision. A stale form must be reloaded, including when an address has changed away and back. The email and last-event metadata update atomically with an immutable per-student history record containing old/new addresses, reason, administrator name/UID, confirmation and server time. The editor shows the latest ten events. Firestore rules reject unlogged edits, history reuse, orphan histories, fabricated actor names, missing confirmation and changes to other roster fields.
+
+HODs and supervisors retain their existing access to the current roster address; only Super Admin reads the email correction history. Administrators gain no project-folder access through this feature. Names, registration identifiers, academic/admission sessions, programmes, allocation, project/archive records and Auth accounts are unchanged.
+
+Previously downloaded email drafts and already sent emails are not recalled or modified. New reminder drafts use the updated roster address and existing prepared drafts are checked for stale roster details before download. Maintaining an address does not send mail, create a student login, change a staff login or independently verify the address. No real student addresses are changed by synthetic/emulator testing.

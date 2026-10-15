@@ -1,0 +1,8 @@
+export function studentEmailValue(value:string,allowEmpty=false){
+ if(typeof value!=='string')throw Error('Enter one valid student email address.');const email=value.trim();if(!email&&allowEmpty)return '';
+ if(email.length>254||! /^[A-Za-z0-9.!#$%&'*+/=?^_{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}$/.test(email))throw Error('Enter one valid student email address. Multiple recipients and email headers are not allowed.');
+ const[local,domain]=email.split('@');if(local.startsWith('.')||local.endsWith('.')||local.includes('..')||domain.split('.').some(label=>label.length>63||! /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label)))throw Error('Enter one valid student email address.');return email;
+}
+export function studentEmailChange(email:string,reason:string,previous:string,confirmed:boolean){const next=studentEmailValue(email,true);if(next===previous)throw Error('The student email address is unchanged.');if(typeof reason!=='string'||!reason.trim()||reason.trim().length>500)throw Error('Enter a reason up to 500 characters.');if(confirmed!==true)throw Error('Confirm you checked this address against the correct student record.');return{email:next,reason:reason.trim(),confirmed:true};}
+export function emailCoverage(rows:{email:string}[]){let missing=0,invalid=0;for(const row of rows){if(!row.email?.trim()){missing++;continue;}try{studentEmailValue(row.email);}catch{invalid++;}}return{total:rows.length,missing,invalid,recorded:rows.length-missing-invalid};}
+export function contactSessionValue(session:string){if(!/^[0-9]{4}\/[0-9]{4}$/.test(session)||Number(session.slice(5))!==Number(session.slice(0,4))+1)throw Error('Enter an academic session such as 2025/2026.');return session;}
