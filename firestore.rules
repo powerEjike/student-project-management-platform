@@ -2,6 +2,22 @@ rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
   function signedIn() { return request.auth != null; }
+  function allocationRole(primaryId,coId,uid) { return primaryId == uid ? 'Primary supervisor' : (coId == uid ? 'Co-supervisor' : 'Not assigned'); }
+  match /allocationSignals/{eventId} {
+   function validSignal(s) { let p=getAfter(projectPath(s.projectId)).data; let path=/databases/$(database)/documents/projects/$(s.projectId)/allocations/$(eventId); let e=getAfter(path).data; return s.keys().hasOnly(['projectId','departmentId','createdBy','createdAt'])
+    && chatStaff(s.departmentId) && p.departmentId == s.departmentId && p.lastAllocationEventId == eventId && !exists(path)
+    && e.departmentId == s.departmentId && e.actorId == request.auth.uid && e.createdAt == request.time && s.createdBy == request.auth.uid && s.createdAt == request.time; }
+   allow create: if active() && validSignal(request.resource.data);
+   allow read,update,delete: if false;
+  }
+  match /allocationUpdates/{uid}/changes/{eventId} {
+   function validUpdate(r) { let path=/databases/$(database)/documents/allocationSignals/$(eventId); let s=getAfter(path).data; let e=getAfter(/databases/$(database)/documents/projects/$(s.projectId)/allocations/$(eventId)).data; return r.keys().hasOnly(['departmentId','previousRole','newRole','createdAt'])
+    && !exists(path) && s.createdBy == request.auth.uid && s.createdAt == request.time && r.departmentId == s.departmentId && chatStaff(s.departmentId)
+    && r.previousRole == allocationRole(e.previousSupervisorId,e.previousCoSupervisorId,uid) && r.newRole == allocationRole(e.supervisorId,e.coSupervisorId,uid) && r.previousRole != r.newRole && r.createdAt == request.time; }
+   allow read: if signedIn() && request.auth.uid == uid && chatStaff(resource.data.departmentId);
+   allow create: if active() && validUpdate(request.resource.data);
+   allow update,delete: if false;
+  }
   match /progressReminderPolicies/{dept} {
    function manager() { return active() && (role() == 'admin' || hod(dept)); }
    function policyPath() { return /databases/$(database)/documents/progressReminderPolicies/$(dept); }

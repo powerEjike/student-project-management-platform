@@ -1,3 +1,4 @@
+import {writeAllocationUpdates} from './allocationNoticeStore';
 import {collection,doc,getDoc,onSnapshot,query,runTransaction,serverTimestamp,where,type DocumentData} from 'firebase/firestore';
 import {app} from './firebase';
 import {getFirestore} from 'firebase/firestore';
@@ -62,6 +63,7 @@ export async function allocateStudent(student:Student,supervisorId:string,coSupe
     const allocation={supervisorId,coSupervisorId,supervisorName:supervisor.data()?.displayName||'',coSupervisorName:co?.data()?.displayName||'',updatedBy:uid,updatedAt:serverTimestamp(),lastAllocationEventId:eventRef.id};
     if(before)tx.update(ref,allocation);else tx.set(ref,{...allocation,departmentId:student.departmentId,studentId:student.id,title:'',status:'Awaiting topic',createdBy:uid,createdAt:serverTimestamp()});
     tx.set(eventRef,{departmentId:student.departmentId,studentId:student.id,supervisorId,coSupervisorId,previousSupervisorId:before?.supervisorId||'',previousCoSupervisorId:before?.coSupervisorId||'',reason:reason.trim(),actorId:uid,createdAt:serverTimestamp()});
+    writeAllocationUpdates(tx,student.id,eventRef.id,student.departmentId,before,{supervisorId,coSupervisorId},uid);
   });
 }
 export function watchAllocationHistory(projectId:string,receive:(data:DocumentData[])=>void,fail:()=>void){return onSnapshot(collection(db,'projects',projectId,'allocations'),s=>receive(s.docs.map(d=>({id:d.id,...d.data()})).sort((a:DocumentData,b:DocumentData)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))),fail);}
