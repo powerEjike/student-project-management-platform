@@ -1,4 +1,27 @@
 import {emptyContacts,nextContactSummary} from '../src/contact.ts';
+test('Super Admin intake policies require immutable audits and gate new receipts and reviews without hiding history',async()=>{
+ const id='intake-policy-project';await seedWorkflow(id);await topicDecision(id);const sup=env.authenticatedContext('sup').firestore(),admin=env.authenticatedContext('admin').firestore();
+ const oldHash='1'.repeat(64),newHash='2'.repeat(64);const metadata=(fileName,size)=>({fileName,size,pages:1,createdBy:'sup',createdAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(sup,'projects',id,'documentReviews',oldHash),metadata('previous.docx',2*1048576)));
+ async function policy(uid='admin',revision='intake-one',changes={},audit=true,previous={previousMaxMiB:20,previousPdf:true,previousWord:true}){const db=env.authenticatedContext(uid).firestore(),ref=doc(db,'documentIntakePolicies','dept-a'),b=writeBatch(db),p={maxMiB:1,pdfAllowed:true,wordAllowed:false,note:'Synthetic department intake decision',revision,updatedBy:uid,updatedAt:serverTimestamp(),...changes};b.set(ref,p);if(audit)b.set(doc(ref,'history',revision),{...p,...previous,actorName:uid});return b.commit();}
+ try {
+  for(const uid of['sup','co','hod-a','hod-b','foreign','inactive','unknown'])await assertFails(policy(uid));
+  await assertFails(policy('admin','no-audit',{},false));for(const changes of[{maxMiB:0},{maxMiB:21},{maxMiB:1.5},{pdfAllowed:false},{note:' '},{updatedBy:'hod-a'}])await assertFails(policy('admin','invalid',changes));
+  await assertSucceeds(policy()).catch(e=>{throw Error('Intake policy with audit: '+e.message);});
+  for(const uid of['sup','co','hod-a','admin'])await assertSucceeds(getDoc(doc(env.authenticatedContext(uid).firestore(),'documentIntakePolicies','dept-a')));
+  for(const uid of['hod-b','foreign','inactive','unknown'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'documentIntakePolicies','dept-a')));
+  await assertFails(getDocs(collection(sup,'documentIntakePolicies','dept-a','history')));await assertSucceeds(getDocs(collection(admin,'documentIntakePolicies','dept-a','history')));
+  await assertFails(policy('admin','unchanged',{},true,{previousMaxMiB:1,previousPdf:true,previousWord:false}));await assertFails(policy('admin','intake-one',{maxMiB:2},true,{previousMaxMiB:1,previousPdf:true,previousWord:false}));
+  await assertFails(setDoc(doc(sup,'projects',id,'documentReviews',newHash),metadata('new.docx',100)));await assertFails(setDoc(doc(sup,'projects',id,'documentReviews',newHash),metadata('new.pdf',1048577)));await assertSucceeds(setDoc(doc(sup,'projects',id,'documentReviews',newHash),metadata('new.PDF',1048576)));
+  await assertSucceeds(getDoc(doc(sup,'projects',id,'documentReviews',oldHash)));
+  // Existing saved reviews can still receive remarks after their original type is disabled.
+  const b=writeBatch(sup),pref=doc(sup,'projects',id),aid='intake-old-review-remark';b.set(doc(pref,'documentReviews',oldHash,'annotations',aid),{anchorKind:'Text',page:1,pageWidth:595,pageHeight:842,rects:[{x:40,y:700,width:150,height:12}],quote:'Existing passage',comment:'Continue the earlier review.',category:'Content',severity:'Suggestion',actorId:'sup',actorName:'sup',createdAt:serverTimestamp()});b.set(doc(pref,'feedback',aid),{category:'Content',priority:'Suggestion',milestoneKey:'',milestoneName:'Overall project',comment:'Continue the earlier review.',summary:'Earlier review continued',actorId:'sup',actorName:'sup',createdAt:serverTimestamp()});b.update(pref,{lastFeedbackEventId:aid,lastFeedbackBy:'sup',lastFeedbackAt:serverTimestamp(),updatedBy:'sup',updatedAt:serverTimestamp()});await assertSucceeds(b.commit());
+  async function receipt(fileName,size,sourceKind){const ref=doc(sup,'projects',id),batch=writeBatch(sup),rid='policy-receipt';batch.set(doc(ref,'submissionReceipts',rid),{fileName,size,pages:1,sourceKind,sourceHash:'3'.repeat(64),reviewHash:'3'.repeat(64),milestoneKey:'m0',milestoneName:'Proposal',registerId:'stage_m0',version:1,previousReceiptId:'',receivedOn:'2024-02-29',channel:'Email',note:'',actorId:'sup',actorName:'sup',createdAt:serverTimestamp()});batch.set(doc(ref,'submissionRegisters','stage_m0'),{latestReceiptId:rid,version:1,sourceHash:'3'.repeat(64),actorId:'sup',updatedAt:serverTimestamp()});return batch.commit();}
+  await assertFails(receipt('draft.docx',100,'Word'));await assertFails(receipt('draft.pdf',1048577,'PDF'));await assertSucceeds(receipt('draft.pdf',1048576,'PDF'));
+  await assertFails(updateDoc(doc(admin,'documentIntakePolicies','dept-a','history','intake-one'),{note:'Changed'}));await assertFails(deleteDoc(doc(admin,'documentIntakePolicies','dept-a')));
+  await assertFails(policy('admin','bad-previous',{maxMiB:2}));await assertSucceeds(policy('admin','intake-two',{maxMiB:2},true,{previousMaxMiB:1,previousPdf:true,previousWord:false}));
+ } finally {await env.withSecurityRulesDisabled(async c=>{await deleteDoc(doc(c.firestore(),'documentIntakePolicies','dept-a'));});}
+});
 test('chat replies require a live same-conversation root, retain immutable targets and preserve private membership',async()=>{
  const sup=env.authenticatedContext('sup').firestore(),co=env.authenticatedContext('co').firestore();const cid='reply-private';
  await assertSucceeds(setDoc(doc(sup,'chats',cid),{departmentId:'dept-a',kind:'direct',name:'Synthetic reply conversation',memberIds:['sup','co'],createdBy:'sup',createdAt:serverTimestamp()}));

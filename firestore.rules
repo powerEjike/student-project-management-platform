@@ -2,6 +2,27 @@ rules_version = '2';
 service cloud.firestore {
  match /databases/{database}/documents {
   function signedIn() { return request.auth != null; }
+  function intakeAllowed(dept,name,size) { let path=/databases/$(database)/documents/documentIntakePolicies/$(dept); let p=exists(path) ? get(path).data : {'maxMiB':20,'pdfAllowed':true,'wordAllowed':true};
+   return size <= p.maxMiB * 1048576 && ((p.pdfAllowed == true && name.lower().matches('.*\\.pdf')) || (p.wordAllowed == true && name.lower().matches('.*\\.docx'))); }
+  match /documentIntakePolicies/{dept} {
+   function policyPath() { return /databases/$(database)/documents/documentIntakePolicies/$(dept); }
+   function previous() { return exists(policyPath()) ? get(policyPath()).data : {'maxMiB':20,'pdfAllowed':true,'wordAllowed':true}; }
+   function validPolicy(r) { return r.keys().hasOnly(['maxMiB','pdfAllowed','wordAllowed','note','revision','updatedBy','updatedAt']) && r.maxMiB is int && r.maxMiB >= 1 && r.maxMiB <= 20 && r.pdfAllowed is bool && r.wordAllowed is bool && (r.pdfAllowed || r.wordAllowed)
+    && r.note is string && r.note.trim().size() > 0 && r.note.size() <= 500 && text(r.revision,128) && r.updatedBy == request.auth.uid && r.updatedAt == request.time; }
+   allow get: if active() && (role() == 'admin' || same(dept));
+   allow list,delete: if false;
+   allow create,update: if active() && role() == 'admin' && exists(/databases/$(database)/documents/departments/$(dept)) && validPolicy(request.resource.data)
+    && (request.resource.data.maxMiB != previous().maxMiB || request.resource.data.pdfAllowed != previous().pdfAllowed || request.resource.data.wordAllowed != previous().wordAllowed)
+    && !exists(/databases/$(database)/documents/documentIntakePolicies/$(dept)/history/$(request.resource.data.revision))
+    && getAfter(/databases/$(database)/documents/documentIntakePolicies/$(dept)/history/$(request.resource.data.revision)).data.diff(request.resource.data).affectedKeys().hasOnly(['previousMaxMiB','previousPdf','previousWord','actorName']);
+   match /history/{eid} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin' && getAfter(policyPath()).data.revision == eid && getAfter(policyPath()).data.revision != previous().get('revision','') && getAfter(policyPath()).data.updatedAt == request.time
+     && request.resource.data.diff(getAfter(policyPath()).data).affectedKeys().hasOnly(['previousMaxMiB','previousPdf','previousWord','actorName'])
+     && request.resource.data.previousMaxMiB == previous().maxMiB && request.resource.data.previousPdf == previous().pdfAllowed && request.resource.data.previousWord == previous().wordAllowed && request.resource.data.actorName == get(self()).data.displayName;
+    allow update,delete: if false;
+   }
+  }
   match /repositoryNoticePolicies/{dept} {
    function manager() { return active() && (role() == 'admin' || hod(dept)); }
    function policyPath() { return /databases/$(database)/documents/repositoryNoticePolicies/$(dept); }
@@ -587,7 +608,7 @@ service cloud.firestore {
     allow create: if feedbackWriter(get(projectPath(id)).data) && hash.matches('[a-f0-9]{64}')
      && request.resource.data.keys().hasOnly(['fileName','size','pages','createdBy','createdAt'])
      && request.resource.data.fileName is string && request.resource.data.fileName.trim().size() > 0 && request.resource.data.fileName.size() <= 200
-     && request.resource.data.size is int && request.resource.data.size >= 1 && request.resource.data.size <= 20971520
+     && request.resource.data.size is int && request.resource.data.size >= 1 && request.resource.data.size <= 20971520 && intakeAllowed(get(projectPath(id)).data.departmentId,request.resource.data.fileName,request.resource.data.size)
      && request.resource.data.pages is int && request.resource.data.pages >= 1 && request.resource.data.pages <= 100
      && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
     allow update,delete: if false;
@@ -653,7 +674,7 @@ service cloud.firestore {
     function receiptPath() { return /databases/$(database)/documents/projects/$(id)/submissionReceipts/$(receiptId); }
     function validReceipt(r) { let p=get(projectPath(id)).data; let head=/databases/$(database)/documents/projects/$(id)/submissionRegisters/$(r.registerId); return r.keys().hasOnly(['fileName','size','pages','sourceKind','sourceHash','reviewHash','milestoneKey','milestoneName','registerId','version','previousReceiptId','receivedOn','channel','note','actorId','actorName','createdAt'])
      && r.fileName is string && r.fileName.trim().size() > 0 && r.fileName.size() <= 200 && ((r.sourceKind == 'PDF' && r.fileName.lower().matches('.*\\.pdf')) || (r.sourceKind == 'Word' && r.fileName.lower().matches('.*\\.docx')))
-     && r.size is int && r.size >= 1 && r.size <= 20971520 && r.pages is int && r.pages >= 1 && r.pages <= 100
+     && r.size is int && r.size >= 1 && r.size <= 20971520 && intakeAllowed(p.departmentId,r.fileName,r.size) && r.pages is int && r.pages >= 1 && r.pages <= 100
      && r.sourceHash is string && r.sourceHash.matches('[a-f0-9]{64}') && r.reviewHash is string && r.reviewHash.matches('[a-f0-9]{64}')
      && r.milestoneKey is string && r.milestoneKey.matches('([a-zA-Z0-9_-]{1,128})?') && r.registerId == (r.milestoneKey == '' ? 'overall' : 'stage_' + r.milestoneKey)
      && (r.milestoneKey == '' ? r.milestoneName == 'Overall project' : r.milestoneKey in p.get('milestones',{}) && r.milestoneName == p.milestones[r.milestoneKey].name)
