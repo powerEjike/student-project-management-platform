@@ -9,7 +9,7 @@ export async function importRoster(rows:RosterRow[],settings:{departmentId:strin
   const part=rows.slice(start,start+10);const result=await runTransaction(db,async tx=>{
    const refs=part.map(r=>doc(db,'students',`${settings.departmentId}__${rosterKey(settings.session)}__${rosterKey(r.matricNumber)}`));
    const snapshots=await Promise.all(refs.map(ref=>tx.get(ref)));let created=0;let existing=0;
-   snapshots.forEach((s,i)=>{if(s.exists()){existing++;return;}tx.set(refs[i],{...settings,...part[i],programme:settings.programme.trim(),level:settings.level.trim(),matricKey:rosterKey(part[i].matricNumber),email:'',createdBy:uid,createdAt:serverTimestamp()});created++;});
+   snapshots.forEach((s,i)=>{if(s.exists()){existing++;return;}tx.set(refs[i],{...settings,...part[i],programme:settings.programme.trim(),level:settings.level.trim(),matricKey:rosterKey(part[i].matricNumber),email:part[i].email||'',createdBy:uid,createdAt:serverTimestamp()});created++;});
    if(created)tx.set(doc(collection(db,'rosterImports')),{departmentId:settings.departmentId,session:settings.session,admissionSession:settings.admissionSession,added:created,skipped:existing,actorId:uid,createdAt:serverTimestamp()});
    return {created,existing};
   });added+=result.created;skipped+=result.existing;onProgress(added,skipped);
