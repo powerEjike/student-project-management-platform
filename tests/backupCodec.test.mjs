@@ -1,0 +1,30 @@
+import{test}from'node:test';import assert from'node:assert/strict';import{Firestore,Timestamp,GeoPoint}from'firebase-admin/firestore';
+import{spawnSync}from'node:child_process';import{existsSync}from'node:fs';import{fileURLToPath}from'node:url';
+import{encodeValue,decodeValue,validateSnapshot,encryptBackup,decryptBackup,documentPath,SOURCE_PROJECT,RECOVERY_PROJECT}from'../scripts/backup-codec.mjs';import{recoveryTarget,rehearseFirestore}from'../scripts/backup-operations.mjs';
+const source=new Firestore({projectId:SOURCE_PROJECT}),target=new Firestore({projectId:RECOVERY_PROJECT});const password='synthetic-backup-passphrase-for-tests-only';
+const snapshot=()=>({format:'projecttrack-firestore',version:1,sourceProject:SOURCE_PROJECT,database:'(default)',actorId:'synthetic-admin',startedAt:'2026-10-16T10:00:00.000Z',finishedAt:'2026-10-16T10:00:01.000Z',consistency:'rolling',documents:[{path:'projects/synthetic/history/event',updateTime:{seconds:123,nanoseconds:987654321},data:encodeValue({title:'Synthetic study',version:2},SOURCE_PROJECT)}]});
+test('backup codec retains nested maps, Unicode, bytes, nanosecond timestamps, safe integers and references without marker collisions',()=>{
+ const value={name:'Élodie 研究',type:'map',value:'ordinary user data',integer:9007199254740993n,negative:-9223372036854775808n,double:3.14159,nan:NaN,infinity:Infinity,negativeInfinity:-Infinity,created:new Timestamp(123,987654321),location:new GeoPoint(6.45,3.39),bytes:Buffer.from([0,255,42]),reference:source.doc('projects/synthetic'),nested:[null,true,{data:['a',4]}],unsafeKey:Object.fromEntries([['__proto__',{polluted:true}]])};
+ const encoded=encodeValue(value,SOURCE_PROJECT),decoded=decodeValue(encoded,target);assert.deepEqual(encodeValue(decoded,RECOVERY_PROJECT),encoded);assert.equal(decoded.integer,9007199254740993n);assert.equal(decoded.created.nanoseconds,987654321);assert.equal(decoded.reference.firestore.projectId,RECOVERY_PROJECT);assert.equal(decoded.reference.path,'projects/synthetic');assert.equal({}.polluted,undefined);assert.ok(Object.hasOwn(decoded.unsafeKey,'__proto__'));
+ assert.throws(()=>encodeValue(source.doc('projects/synthetic'),'another-project'));assert.throws(()=>encodeValue(new Date(),SOURCE_PROJECT));const cycle={};cycle.self=cycle;assert.throws(()=>encodeValue(cycle,SOURCE_PROJECT));
+});
+test('backup validation rejects duplicate paths, invalid timestamps, unknown tags, reference paths and forged integer encodings',()=>{
+ validateSnapshot(snapshot(),target);for(const path of['projects','/projects/p','projects//p','projects/../history/id','projects/p\0'])assert.throws(()=>documentPath(path));
+ const duplicate=snapshot();duplicate.documents.push(duplicate.documents[0]);assert.throws(()=>validateSnapshot(duplicate,target));
+ const invalidTime=snapshot();invalidTime.documents[0].updateTime.nanoseconds=1000000000;assert.throws(()=>validateSnapshot(invalidTime,target));
+ for(const data of[{type:'integer',value:'9223372036854775808'},{type:'integer',value:'-0'},{type:'unknown',value:''},{type:'map',value:[['a',{type:'null',value:null}],['a',{type:'boolean',value:true}]]},{type:'reference',value:'projects'},{type:'bytes',value:'not base64'}])assert.throws(()=>decodeValue(data,target));
+ const extra=snapshot();extra.extra='unapproved';assert.throws(()=>validateSnapshot(extra,target));
+});
+test('encrypted backups authenticate contents and reject wrong keys, tampering, weak passphrases and changed KDF parameters',()=>{
+ const original=snapshot(),encrypted=encryptBackup(original,password);assert.deepEqual(decryptBackup(encrypted,password),original);assert.ok(!encrypted.toString().includes('Synthetic study'));assert.notDeepEqual(encryptBackup(original,password),encrypted);
+ assert.throws(()=>decryptBackup(encrypted,'wrong-private-passphrase-for-test'));const tampered=JSON.parse(encrypted);const payload=Buffer.from(tampered.ciphertext,'base64');payload[0]^=1;tampered.ciphertext=payload.toString('base64');assert.throws(()=>decryptBackup(Buffer.from(JSON.stringify(tampered)),password));const kdf=JSON.parse(encrypted);kdf.kdf='expensive-attacker-choice';assert.throws(()=>decryptBackup(Buffer.from(JSON.stringify(kdf)),password));assert.throws(()=>encryptBackup(original,'short'));
+});
+test('restore rehearsal accepts only the fixed demo project and loopback emulator and never writes to a nonempty target',async()=>{
+ recoveryTarget(RECOVERY_PROJECT,'127.0.0.1:8080');for(const [project,host]of[[SOURCE_PROJECT,'127.0.0.1:8080'],[RECOVERY_PROJECT,undefined],[RECOVERY_PROJECT,'firestore.googleapis.com:443'],[RECOVERY_PROJECT,'127.0.0.1.evil:8080'],[RECOVERY_PROJECT,'127.0.0.1:0'],[RECOVERY_PROJECT,'127.0.0.1:65536']])assert.throws(()=>recoveryTarget(project,host));
+ const previous=process.env.FIRESTORE_EMULATOR_HOST;process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080';let writes=0;try{await assert.rejects(()=>rehearseFirestore({projectId:SOURCE_PROJECT},snapshot()));await assert.rejects(()=>rehearseFirestore({projectId:RECOVERY_PROJECT,databaseId:'(default)',doc:p=>target.doc(p),listCollections:async()=>[{}],batch:()=>{writes++;}},snapshot()));assert.equal(writes,0);}finally{if(previous===undefined)delete process.env.FIRESTORE_EMULATOR_HOST;else process.env.FIRESTORE_EMULATOR_HOST=previous;}
+});
+test('the real export command refuses repository output before requesting production credentials or writing a file',()=>{
+ const repository=fileURLToPath(new URL('..',import.meta.url)),output=fileURLToPath(new URL('../blocked-synthetic.ptbackup',import.meta.url));assert.equal(existsSync(output),false);
+ const result=spawnSync(process.execPath,['scripts/firestore-backup.mjs','export','--file',output,'--actor','synthetic-admin'],{cwd:repository,encoding:'utf8',timeout:20000,env:{...process.env,PROJECTTRACK_BACKUP_PASSPHRASE:password,FIRESTORE_EMULATOR_HOST:'',FIREBASE_AUTH_EMULATOR_HOST:''}});
+ assert.equal(result.status,1);assert.match(result.stderr,/private output path outside the repository/);assert.equal(existsSync(output),false);assert.equal(result.stdout,'');
+});

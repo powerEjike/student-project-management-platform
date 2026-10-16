@@ -42,5 +42,7 @@ See [access and setup](docs/access-and-setup.md) for permissions, local preview,
 
 ## Delivery
 
+Manual encrypted Firestore exports and an emulator-only restore rehearsal are available through trusted operator tooling. See [backup and recovery](docs/backup-and-recovery.md) for scope, credentials, private passphrase handling and rolling-read limitations. This does not enable daily backups, production restore, Auth recovery or Storage backups.
+
 Begin with one department. Verify permissions, interrupted uploads, failed conversions, imports, reassignment access and backup restoration. Pilot with supervisors before expanding.
 

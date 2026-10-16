@@ -8,3 +8,4 @@ out/
 dist/
 public/pdfjs/
 *.tsbuildinfo
+*.ptbackup
