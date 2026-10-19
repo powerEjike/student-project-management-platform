@@ -50,14 +50,16 @@ export async function addStudent(data:Omit<Student,'id'|'matricKey'>,uid:string)
   const value={...data,name:data.name.trim(),matricNumber:data.matricNumber.trim(),programme:data.programme.trim(),level:data.level.trim(),session:data.session.trim(),email:data.email.trim(),matricKey:canonical(data.matricNumber),createdBy:uid,createdAt:serverTimestamp()};
   await runTransaction(db,async tx=>{const ref=doc(db,'students',id);if((await tx.get(ref)).exists())throw new Error('This matric number is already registered for that session.');tx.set(ref,value);});
 }
-export async function allocateStudent(student:Student,supervisorId:string,coSupervisorId:string,reason:string,uid:string){
+export async function allocateStudent(student:Student,supervisorId:string,coSupervisorId:string,reason:string,uid:string,onlyUnassigned=false){
   if(supervisorId===coSupervisorId)throw new Error('Choose a different co-supervisor.');
   await runTransaction(db,async tx=>{
     const ref=doc(db,'projects',student.id);const existing=await tx.get(ref);const before=existing.exists()?existing.data():null;
+    if(onlyUnassigned){if(before)throw Error('This student has already been allocated.');const current=await tx.get(doc(db,'students',student.id));if(!current.exists()||['departmentId','name','matricNumber','session','programme','level'].some(key=>current.data()![key]!==student[key as keyof Student]))throw Error('The student record changed. Review a fresh proposal.');}
     if(before&&['Pending','Withheld'].includes(before.releaseState))throw Error('Decide the release request before changing allocation.');
     if(before&&before.supervisorId===supervisorId&&before.coSupervisorId===coSupervisorId)throw new Error('This student already has that allocation.');
     if(!reason.trim())throw new Error('Enter a reason for this allocation.');
     const supervisor=await tx.get(doc(db,'staff',supervisorId));
+    if(onlyUnassigned&&(!supervisor.exists()||!supervisor.data()?.active||supervisor.data()?.role!=='lecturer'||supervisor.data()?.departmentId!==student.departmentId))throw Error('This lecturer is no longer available.');
     const co=coSupervisorId?await tx.get(doc(db,'staff',coSupervisorId)):null;
     const eventRef=doc(collection(db,'projects',student.id,'allocations'));
     const allocation={supervisorId,coSupervisorId,supervisorName:supervisor.data()?.displayName||'',coSupervisorName:co?.data()?.displayName||'',updatedBy:uid,updatedAt:serverTimestamp(),lastAllocationEventId:eventRef.id};

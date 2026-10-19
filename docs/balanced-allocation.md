@@ -1,0 +1,11 @@
+# Balanced first allocations
+
+The HOD filters the student list, selects 1–100 **unassigned** students, opens **Balanced first allocations**, and chooses participating lecturers. Review every proposed assignment and projected workload, give a reason, check the review box, then apply. If expertise or preferences require different assignments, use the ordinary allocation form instead. This planner does not choose co-supervisors or change existing allocations.
+
+Each successive student goes to the participating lecturer with the lowest projected active primary workload. All sessions and programmes in the department count. Archived (`completedDate`) and withheld projects are excluded. Completed work awaiting defence and pending-release projects still count. Co-supervision counts are displayed separately and are not a balancing weight. Ties use lecturer IDs; student order uses registration numbers then IDs. Grades, gender, email, preferences and topic expertise are not ranking inputs.
+
+The department workload review limit produces warnings; it is advisory rather than reserved capacity. Review is invalidated when the proposed assignments, selected students, participating lecturers, workload counts or displayed limit change.
+
+Before writes, the app reads current departmental student records, projects and active lecturers from the server and recomputes the proposal. A mismatch requires a fresh review. Each allocation transaction verifies that the student still exists with the reviewed identity/cohort details, the lecturer remains active in the department, and the student has no project folder. A concurrent allocation cannot be overwritten. Existing allocation history and recipient notices are created through the normal allocation transaction.
+
+The batch is sequential, not atomic. A failed row stops remaining work and leaves successful allocations intact. Refresh and select remaining unassigned students for a new proposal. Workload totals can change after the initial server read; no department-wide capacity lock or guaranteed optimum is promised. Network, role and permission failures stop the operation. Existing HOD-only allocation rules apply unchanged. No email delivery or paid service is enabled.

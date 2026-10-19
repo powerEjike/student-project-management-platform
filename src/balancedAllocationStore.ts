@@ -1,0 +1,9 @@
+import{collection,getDocsFromServer,query,where}from'firebase/firestore';import{getFirestore}from'firebase/firestore';import{app}from'./firebase';import{allocateStudent}from'./projectStore';import{balancedAllocation}from'./balancedAllocation';import type{Student,Project,Lecturer}from'./models';
+export async function applyBalancedAllocation(ids:string[],participants:string[],departmentId:string,fingerprint:string,reason:string,uid:string,onProgress:(n:number)=>void){
+ if(!reason.trim()||reason.trim().length>500)throw Error('Enter an allocation reason up to 500 characters.');
+ const db=getFirestore(app!);const[ss,ps,ls]=await Promise.all([getDocsFromServer(query(collection(db,'students'),where('departmentId','==',departmentId))),getDocsFromServer(query(collection(db,'projects'),where('departmentId','==',departmentId))),getDocsFromServer(query(collection(db,'staff'),where('departmentId','==',departmentId),where('role','==','lecturer'),where('active','==',true)))]);
+ const students=ss.docs.map(d=>({...d.data(),id:d.id})as Student),projects=ps.docs.map(d=>({...d.data(),id:d.id})as Project),lecturers=ls.docs.map(d=>({...d.data(),id:d.id})as Lecturer);const plan=balancedAllocation(ids,students,projects,lecturers,participants,departmentId);
+ if(plan.issues.length||plan.fingerprint!==fingerprint)throw Error('The student, staff or workload data changed. Review a fresh proposal before applying.');
+ let done=0;for(const row of plan.rows){try{await allocateStudent(students.find(s=>s.id===row.studentId)!,row.supervisorId,'',reason,uid,true);done++;onProgress(done);}catch{throw Error(`Stopped after ${done} of ${plan.rows.length} allocations. Completed allocations are retained. Refresh the workspace and build a new proposal for the remaining unassigned students.`);}}
+ return done;
+}
