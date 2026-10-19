@@ -574,3 +574,26 @@ test('categorized supervisor feedback is assigned-team scoped, immutable and ato
  await assertFails(updateDoc(doc(db,'projects',id,'feedback','primary'),{comment:'Rewrite history'}));await assertFails(deleteDoc(doc(db,'projects',id,'feedback','primary')));
  await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Withheld'}));await assertFails(post('sup','withheld'));await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{releaseState:'Reinstated',completedDate:'2026-10-13'}));await assertFails(post('co','archived'));await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'projects',id),{supervisorId:'other',coSupervisorId:''}));for(const uid of ['sup','co'])await assertFails(getDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id,'feedback','primary')));await assertSucceeds(getDoc(doc(env.authenticatedContext('other').firestore(),'projects',id,'feedback','primary')));
 });
+
+test('shared conversation-open positions are owner-controlled and readable only by current direct-chat participants',async()=>{
+ const{Timestamp}=await import('firebase/firestore');const sup=env.authenticatedContext('sup').firestore(),co=env.authenticatedContext('co').firestore(),cid='open-private';
+ await assertSucceeds(setDoc(doc(sup,'chats',cid),{departmentId:'dept-a',kind:'direct',name:'Synthetic open status',memberIds:['sup','co'],createdBy:'sup',createdAt:serverTimestamp()}));
+ await env.withSecurityRulesDisabled(async c=>{for(const[id,time]of[['older',1000],['newer',2000]])await setDoc(doc(c.firestore(),'chats',cid,'messages',id),{body:'Synthetic',senderId:'sup',senderName:'sup',removed:false,announcement:false,createdAt:Timestamp.fromMillis(time),updatedAt:Timestamp.fromMillis(time)});});
+ const value=(id='older',time=1000)=>({throughMessageId:id,throughCreatedAt:Timestamp.fromMillis(time)}),ref=doc(sup,'chats',cid,'openStates','sup');
+ assert.equal((await assertSucceeds(getDoc(ref))).exists(),false);
+ await assertSucceeds(setDoc(ref,value()));await assertSucceeds(getDoc(doc(co,'chats',cid,'openStates','sup')));
+ for(const uid of['hod-a','admin','other','foreign','inactive-sup','unknown']){const db=env.authenticatedContext(uid).firestore();await assertFails(getDoc(doc(db,'chats',cid,'openStates','sup')));await assertFails(setDoc(doc(db,'chats',cid,'openStates',uid),value()));}
+ await assertFails(setDoc(doc(co,'chats',cid,'openStates','sup'),value()));await assertFails(getDocs(collection(co,'chats',cid,'openStates')));
+ await assertSucceeds(setDoc(doc(sup,'chats',cid,'readStates','sup'),{lastReadAt:Timestamp.fromMillis(1000),muted:true}));await assertFails(getDoc(doc(co,'chats',cid,'readStates','sup')));
+ for(const v of[value('missing'),value('older',999),{...value(),body:'Must not be copied'},value('older/child'),value('older',Date.now()+100000)])await assertFails(setDoc(ref,v));
+ await assertSucceeds(setDoc(ref,value('newer',2000)));await assertFails(setDoc(ref,value()));await assertFails(deleteDoc(doc(co,'chats',cid,'openStates','sup')));await assertSucceeds(deleteDoc(ref));assert.equal((await getDoc(ref)).exists(),false);assert.equal((await getDoc(doc(sup,'chats',cid,'readStates','sup'))).data().muted,true);
+});
+
+test('shared open status is unavailable in group/general chats and loses access when a participant leaves the department',async()=>{
+ const{Timestamp}=await import('firebase/firestore');const sup=env.authenticatedContext('sup').firestore(),co=env.authenticatedContext('co').firestore(),value={throughMessageId:'msg',throughCreatedAt:Timestamp.fromMillis(1000)};
+ await env.withSecurityRulesDisabled(async c=>{for(const kind of['general','group','direct']){await setDoc(doc(c.firestore(),'chats','open-'+kind),{departmentId:'dept-a',kind,name:'Synthetic',memberIds:kind==='general'?[]:['sup','co'],createdBy:'sup',createdAt:Timestamp.fromMillis(1000)});await setDoc(doc(c.firestore(),'chats','open-'+kind,'messages','msg'),{createdAt:Timestamp.fromMillis(1000)});}});
+ for(const kind of['general','group']){await assertFails(setDoc(doc(sup,'chats','open-'+kind,'openStates','sup'),value));await assertFails(getDoc(doc(co,'chats','open-'+kind,'openStates','sup')));}
+ await assertSucceeds(setDoc(doc(sup,'chats','open-direct','openStates','sup'),value));await assertSucceeds(getDoc(doc(co,'chats','open-direct','openStates','sup')));
+ let original;await env.withSecurityRulesDisabled(async c=>{const ref=doc(c.firestore(),'staff','co');original=(await getDoc(ref)).data();await updateDoc(ref,{departmentId:'dept-b'});});
+ try{await assertFails(getDoc(doc(co,'chats','open-direct','openStates','sup')));await assertFails(setDoc(doc(co,'chats','open-direct','openStates','co'),value));}finally{await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'staff','co'),original);});}
+});

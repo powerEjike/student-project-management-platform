@@ -789,6 +789,18 @@ service cloud.firestore {
      && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(mid)).data.senderId == request.auth.uid
      && getAfter(/databases/$(database)/documents/chats/$(cid)/messages/$(mid)).data.createdAt == request.time;
    }
+   match /openStates/{uid} {
+    function directAccess() { let c=get(/databases/$(database)/documents/chats/$(cid)).data; return c.kind == 'direct' && uid in c.memberIds && chatAccess(c); }
+    allow get: if directAccess();
+    allow list: if false;
+    allow create,update: if directAccess() && uid == request.auth.uid
+     && request.resource.data.keys().hasOnly(['throughMessageId','throughCreatedAt'])
+     && request.resource.data.throughMessageId is string && request.resource.data.throughMessageId.matches('[a-zA-Z0-9_-]{1,128}')
+     && request.resource.data.throughCreatedAt is timestamp && request.resource.data.throughCreatedAt <= request.time
+     && request.resource.data.throughCreatedAt == get(/databases/$(database)/documents/chats/$(cid)/messages/$(request.resource.data.throughMessageId)).data.createdAt
+     && (!exists(/databases/$(database)/documents/chats/$(cid)/openStates/$(uid)) || request.resource.data.throughCreatedAt >= resource.data.throughCreatedAt);
+    allow delete: if directAccess() && uid == request.auth.uid;
+   }
    match /readStates/{uid} {
     allow get: if chatAccess(get(/databases/$(database)/documents/chats/$(cid)).data) && uid == request.auth.uid;
     allow list,delete: if false;
