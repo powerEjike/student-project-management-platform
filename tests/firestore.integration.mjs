@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {emptyContacts,nextContactSummary} from '../src/contact.ts';
 test('student email corrections require Super Admin and atomic immutable history while all identity and project permissions remain unchanged',async()=>{
  const id='student-contact-email';await seedWorkflow(id);await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'students',id),{email:'',name:'Synthetic contact student'});});
