@@ -22,3 +22,13 @@ After this follow-up the full audit reports **14 remaining findings (7 moderate,
 The compiled browser asset hashes remain unchanged. ExcelJS ships a prebuilt browser bundle with embedded code; changing its Node dependency resolution does not rebuild that vendor bundle. The audit result covers the npm dependency graph, not an independent examination of embedded browser code. Do not claim that this override rewrites the browser's UUID implementation or resolves every potential browser issue.
 
 These changes do not alter Firestore rules, staff permissions, student records, billing or enabled Firebase services.
+
+## Upstream CLI migration
+
+Firebase CLI is now pinned to **15.34.0**, replacing 14.27.0. Its Node requirement is compatible with local Node 24 and CI Node 22. The major-version emulator requirement is Java 21, which CI already provides. The removed Bolt/experimental commands, changed managed-backup JSON output and Functions timeout checks are not used by this repository's Hosting/Firestore permission/emulator recovery workflows. See [15.0 migration notes](https://github.com/firebase/firebase-tools/releases/tag/v15.0.0) and [15.34 release notes](https://github.com/firebase/firebase-tools/releases/tag/v15.34.0).
+
+The CLI's patched native tar range replaces the temporary `firebase-tools` tar override. The Firestore transport and older-UUID overrides remain. This upgrade removes unused CLI dependencies and updates its CSV, YAML and JSON stream dependencies; application Firebase/ExcelJS versions stay unchanged.
+
+Full audit after this migration: **5 reports (2 moderate, 3 high, 0 critical)**, down from 14. These reports trace to `braces` through the CLI's chokidar and `@opentelemetry/core` through its Pub/Sub tooling. The [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) lists no patched version at review time. The [OpenTelemetry advisory](https://github.com/advisories/GHSA-8988-4f7v-96qf) covers the older major used by Pub/Sub; forcing a major override without compatibility evidence is not a reviewed fix. These remain visible and are not suppressed. Avoid untrusted local watch/glob configurations; the developer tool graph is not served as the web application.
+
+CLI version checks use `CI=true`, as does deployment, to avoid interactive update-check configuration writes in the restricted local environment. No update-check directory permissions are widened. The production/browser audit caveats above still apply.
