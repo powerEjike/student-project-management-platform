@@ -19,4 +19,6 @@ Direct CommonJS `v4()` checks passed through ExcelJS, firebase-tools, google-gax
 
 After this follow-up the full audit reports **14 remaining findings (7 moderate, 7 high, 0 critical)**. A separate `npm audit --omit=dev` reports **zero findings** at the time of this check. This distinguishes production dependencies from the remaining development/tooling chains; it does not establish that the application is vulnerability-free. Continue assessing the remaining CLI reports separately. See the [UUID advisory](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
 
+The compiled browser asset hashes remain unchanged. ExcelJS ships a prebuilt browser bundle with embedded code; changing its Node dependency resolution does not rebuild that vendor bundle. The audit result covers the npm dependency graph, not an independent examination of embedded browser code. Do not claim that this override rewrites the browser's UUID implementation or resolves every potential browser issue.
+
 These changes do not alter Firestore rules, staff permissions, student records, billing or enabled Firebase services.
