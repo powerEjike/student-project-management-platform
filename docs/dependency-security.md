@@ -11,4 +11,12 @@ The npm audit changed from **29 reports (16 moderate, 12 high, 1 critical)** to 
 
 References: [gRPC certificate-context advisory](https://github.com/advisories/GHSA-m9gg-hp2v-232j), [gRPC error disclosure](https://github.com/advisories/GHSA-f596-whhp-79r4), [tar extraction advisory](https://github.com/advisories/GHSA-34x7-hfp2-rc4v), [tar recursion advisory](https://github.com/advisories/GHSA-r292-9mhp-454m).
 
-This change does not alter Firestore rules, staff permissions, student records, billing or enabled Firebase services.
+## UUID compatibility follow-up
+
+The selector override `uuid@<11.1.1` now resolves to **11.1.1**, replacing 8.x/9.x copies while leaving the existing 14.x copy alone. This crosses major versions for the older consumers. Their inspected call sites use CommonJS `v4()`, which the patched release retains; this is not a blanket assumption that every UUID API is compatible.
+
+Direct CommonJS `v4()` checks passed through ExcelJS, firebase-tools, google-gax, teeny-request and gaxios resolution. A synthetic ExcelJS workbook round-trip exercised conditional formatting and preserved Unicode, text registration `000123`, numeric zero CGPA and academic session. No real student spreadsheet was used.
+
+After this follow-up the full audit reports **14 remaining findings (7 moderate, 7 high, 0 critical)**. A separate `npm audit --omit=dev` reports **zero findings** at the time of this check. This distinguishes production dependencies from the remaining development/tooling chains; it does not establish that the application is vulnerability-free. Continue assessing the remaining CLI reports separately. See the [UUID advisory](https://github.com/advisories/GHSA-w5hq-g745-h8pq).
+
+These changes do not alter Firestore rules, staff permissions, student records, billing or enabled Firebase services.
