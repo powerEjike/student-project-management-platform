@@ -915,6 +915,20 @@ service cloud.firestore {
    allow get: if (signedIn() && portalOwner(id)) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
    allow list,delete: if false;
    allow create,update: if safeView(request.resource.data);
+   match /replies/{replyId} {
+    function permitted() { return (signedIn() && portalOwner(id)) || (exists(projectPath(id)) && access(get(projectPath(id)).data)); }
+    allow read: if permitted();
+    allow create: if signedIn() && portalOwner(id) && exists(/databases/$(database)/documents/studentPortalViews/$(id))
+     && request.resource.data.keys().hasOnly(['body','studentUid','studentName','feedback','feedbackPublishedAt','createdAt'])
+     && request.resource.data.body is string && request.resource.data.body.trim().size() > 0 && request.resource.data.body.size() <= 2000
+     && request.resource.data.studentUid == request.auth.uid
+     && request.resource.data.studentName == get(/databases/$(database)/documents/studentPortalViews/$(id)).data.name
+     && request.resource.data.feedback is string && request.resource.data.feedback.trim().size() > 0
+     && request.resource.data.feedback == getAfter(/databases/$(database)/documents/studentPortalViews/$(id)).data.feedback
+     && request.resource.data.feedbackPublishedAt == getAfter(/databases/$(database)/documents/studentPortalViews/$(id)).data.publishedAt
+     && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
   }
   match /{document=**} { allow read,write: if false; }
  }

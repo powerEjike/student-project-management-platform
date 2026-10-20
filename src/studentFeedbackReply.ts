@@ -1,0 +1,2 @@
+export function studentReplyText(body:string){const text=body.trim();if(!text||text.length>2000)throw Error('Enter a reply between 1 and 2,000 characters.');return text;}
+export function sameFeedbackEdition(actual:{seconds:number;nanoseconds:number}|undefined,expected:{seconds:number;nanoseconds:number}|undefined){return !!actual&&!!expected&&actual.seconds===expected.seconds&&actual.nanoseconds===expected.nanoseconds;}

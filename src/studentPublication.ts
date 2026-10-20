@@ -6,4 +6,4 @@ export function studentPublication(project:Project,student:Student,feedback:stri
  if(entries.length>10||entries.some(([key],i)=>key!==`m${i}`))throw Error('This project needs a standard progress template before publication.');
  return {studentId:student.id,departmentId:student.departmentId,name:student.name,matricNumber:student.matricNumber,session:student.session,programme:student.programme,supervisorName:project.supervisorName,topic:project.title,topicDecision:project.topicDecision||'',projectStatus:project.completedDate?'Archived':project.defenceCleared?'Completed — ready for defence':project.status,stages:entries.map(([,m])=>({name:m.name,status:m.status,dueDate:m.dueDate})),feedback:feedback.trim()};
 }
-export type StudentPublication=ReturnType<typeof studentPublication>&{publishedAt?:{toDate:()=>Date};publishedBy:string};
+export type StudentPublication=ReturnType<typeof studentPublication>&{publishedAt?:{seconds:number;nanoseconds:number;toDate:()=>Date};publishedBy:string};
