@@ -1,3 +1,4 @@
+import {createAssignedRosterLoader} from './assignedRosterLoader';
 import SimpleStudentDashboard from './SimpleStudentDashboard';
 import SimpleProjectFolder from './SimpleProjectFolder';
 import AdminControlCentre from './AdminControlCentre';
@@ -28,11 +29,11 @@ export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProj
     setAdminDepartmentsReady(false);setAdminDirectoryReady(false);setDepartments([]);setDirectory([]);setLoaded(false);setError('');setOpenProject(null);setStudents([]);setProjects([]);
     const fail=()=>{setError('Could not load this workspace. Check your connection and staff assignment.');setLoaded(true);};
     if(profile.role==='admin'){const a=watchDepartments(data=>{setDepartments(data);setLoaded(true);setAdminDepartmentsReady(true);},()=>{setAdminDepartmentsReady(false);fail();});const b=watchStaffDirectory(data=>{setDirectory(data);setAdminDirectoryReady(true);},()=>{setAdminDirectoryReady(false);fail();});return()=>{a();b();};}
-    let active=true;let request=0;
-    const offProjects=watchProjects(profile,uid,data=>{const current=++request;setProjects(data);setLoaded(true);if(profile.role==='lecturer'){setStudents([]);Promise.all(data.map(p=>readStudent(p.studentId))).then(items=>{if(active&&current===request)setStudents(items.filter((s):s is Student=>!!s));}).catch(()=>{if(active&&current===request)fail();});}},fail);
+    const roster=createAssignedRosterLoader(readStudent,setStudents,fail);
+    const offProjects=watchProjects(profile,uid,data=>{setProjects(data);setLoaded(true);if(profile.role==='lecturer')roster.refresh(data.map(p=>p.studentId));},()=>{roster.clear();setProjects([]);fail();});
     const offStudents=profile.role==='hod'?watchStudents(profile.departmentId!,setStudents,fail):()=>{};
     const offLecturers=profile.role==='hod'?watchLecturers(profile.departmentId!,setLecturers,fail):()=>{};
-    return()=>{active=false;offProjects();offStudents();offLecturers();};
+    return()=>{roster.dispose();offProjects();offStudents();offLecturers();};
   },[profile.role,profile.departmentId,uid]);
   useEffect(()=>{if(!requestedProjectId||!loaded||profile.role==='admin')return;const target=projects.find(p=>p.id===requestedProjectId);if(target&&students.some(s=>s.id===target.studentId)){setOpenProject(target.id);onProjectRequestHandled?.();return;}const timer=setTimeout(()=>{setError('Could not open this linked project. Your access may have changed; select an available folder or try the link again.');onProjectRequestHandled?.();},10000);return()=>clearTimeout(timer);},[requestedProjectId,loaded,projects,students,profile.role]);
   async function saveDepartment(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{await createDepartment(departmentName,uid);setDepartmentName('');setMessage('Department created. Staff access is provisioned by the administrator.');}catch(err){setError(readableError(err));}finally{setBusy(false);}}
