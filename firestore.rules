@@ -837,24 +837,59 @@ service cloud.firestore {
     && nid.matches('[a-f0-9]{64}') && request.resource.data.keys().hasOnly(['seenAt']) && request.resource.data.seenAt == request.time;
    allow delete: if false;
   }
+  match /studentAccountRequests/{uid} {
+   function own() { return signedIn() && uid == request.auth.uid; }
+   function decision(r) {
+    return active() && role() == 'admin' && resource.data.status == 'Pending'
+     && r.diff(resource.data).affectedKeys().hasOnly(['status','studentId','departmentId','reason','reviewedBy','reviewedAt'])
+     && r.reviewedBy == request.auth.uid && r.reviewedAt == request.time && r.reason is string && r.reason.size() <= 500
+     && ((r.status == 'Rejected' && r.reason.trim().size() > 0 && r.studentId == '' && r.departmentId == '')
+      || (r.status == 'Approved' && r.studentId is string && exists(studentPath(r.studentId))
+       && getAfter(studentPath(r.studentId)).data.departmentId == r.departmentId
+       && getAfter(studentPath(r.studentId)).data.matricKey == resource.data.matricKey
+       && getAfter(studentPath(r.studentId)).data.session == resource.data.session
+       && getAfter(studentPath(r.studentId)).data.email.lower() == resource.data.email
+       && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.active == true
+       && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.requestUid == uid
+       && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.studentId == r.studentId
+       && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.updatedBy == request.auth.uid
+       && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.updatedAt == request.time));
+   }
+   allow get: if own() || (active() && role() == 'admin');
+   allow list: if active() && role() == 'admin';
+   allow create: if own() && request.resource.data.keys().hasOnly(['name','matricNumber','matricKey','session','departmentName','email','status','createdAt'])
+    && text(request.resource.data.name,120) && text(request.resource.data.matricNumber,80) && text(request.resource.data.matricKey,80)
+    && request.resource.data.matricKey.matches('[A-Z0-9]+') && text(request.resource.data.departmentName,120)
+    && request.resource.data.session is string && request.resource.data.session.matches('[0-9]{4}/[0-9]{4}')
+    && request.resource.data.email == request.auth.token.get('email','').lower() && request.resource.data.email.size() > 3
+    && request.resource.data.status == 'Pending' && request.resource.data.createdAt == request.time;
+   allow update: if decision(request.resource.data);
+   allow delete: if false;
+  }
   // Student access is limited to a separate, explicitly published projection.
   function portalOwner(id) {
    let email=request.auth.token.get('email','').lower();
    let a=get(/databases/$(database)/documents/studentPortalAccess/$(email)).data;
    let student=get(studentPath(id)).data;
    return signedIn() && request.auth.token.get('email_verified',false) == true && a.active == true && a.studentId == id
-    && a.email == email && a.departmentId == student.departmentId && student.email.lower() == email;
+    && a.requestUid == request.auth.uid && a.email == email && a.departmentId == student.departmentId && student.email.lower() == email
+    && get(/databases/$(database)/documents/studentAccountRequests/$(a.requestUid)).data.status == 'Approved'
+    && get(/databases/$(database)/documents/studentAccountRequests/$(a.requestUid)).data.studentId == id;
   }
   match /studentPortalAccess/{email} {
    allow get: if (active() && role() == 'admin') || (signedIn() && request.auth.token.get('email_verified',false) == true && request.auth.token.get('email','').lower() == email);
    allow list,delete: if false;
    allow create,update: if active() && role() == 'admin'
-    && request.resource.data.keys().hasOnly(['studentId','departmentId','email','active','updatedBy','updatedAt'])
+    && request.resource.data.keys().hasOnly(['studentId','departmentId','email','active','requestUid','updatedBy','updatedAt'])
     && request.resource.data.studentId is string && exists(studentPath(request.resource.data.studentId))
-    && request.resource.data.departmentId == get(studentPath(request.resource.data.studentId)).data.departmentId
-    && email == get(studentPath(request.resource.data.studentId)).data.email.lower() && email.size() > 3
+    && request.resource.data.departmentId == getAfter(studentPath(request.resource.data.studentId)).data.departmentId
+    && email == getAfter(studentPath(request.resource.data.studentId)).data.email.lower() && email.size() > 3
     && request.resource.data.email == email && request.resource.data.active is bool
     && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+    && (!request.resource.data.active || (request.resource.data.requestUid is string
+     && getAfter(/databases/$(database)/documents/studentAccountRequests/$(request.resource.data.requestUid)).data.status == 'Approved'
+     && getAfter(/databases/$(database)/documents/studentAccountRequests/$(request.resource.data.requestUid)).data.studentId == request.resource.data.studentId
+     && getAfter(/databases/$(database)/documents/studentAccountRequests/$(request.resource.data.requestUid)).data.email == email))
     && (!exists(/databases/$(database)/documents/studentPortalAccess/$(email)) || request.resource.data.studentId == resource.data.studentId);
   }
   function publishedStage(stages,p,index) {

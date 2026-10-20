@@ -1,0 +1,4 @@
+import test from'node:test';import assert from'node:assert/strict';import{accountRequestDetails}from'../src/studentAccountRequest.ts';
+const details={name:' Student Name ',matricNumber:' bio/2022/001 ',departmentName:' Biochemistry ',session:'2025/2026'};
+test('student signup normalizes roster matching details without deriving the current session from admission year',()=>{assert.deepEqual(accountRequestDetails(details),{name:'Student Name',matricNumber:'bio/2022/001',matricKey:'BIO2022001',departmentName:'Biochemistry',session:'2025/2026'});});
+test('invalid signup details are rejected before creating an account',()=>{for(const change of[{name:' '},{departmentName:''},{matricNumber:'---'},{session:'2022/2026'},{session:'2025-2026'},{session:''},{matricNumber:'x'.repeat(81)}])assert.throws(()=>accountRequestDetails({...details,...change}));});
