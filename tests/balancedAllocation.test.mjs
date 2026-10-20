@@ -5,3 +5,25 @@ test('workloads retain pending release and defence-ready projects while excludin
 test('planner rejects existing folders, unavailable students and lecturers, foreign records and oversized or empty selections',()=>{for(const args of[[[],students,[],lecturers,['a']],[[...ids,...Array.from({length:101},(_,i)=>'missing'+i)],students,[],lecturers,['a']],[['missing'],students,[],lecturers,['a']],[['s0'],students.map(s=>({...s,departmentId:'other'})),[],lecturers,['a']],[['s0'],students,[project('s0','b')],lecturers,['a']],[['s0'],students,[],lecturers,[]],[['s0'],students,[],lecturers,['unavailable']]]){const plan=balancedAllocation(...args,department);assert.ok(plan.issues.length);assert.equal(plan.rows.length,0);}});
 test('review fingerprint changes with participant names, selected student cohort details or projected workloads',()=>{const base=balancedAllocation(ids,students,[],lecturers,['a','b'],department);for(const changed of[balancedAllocation(ids,students.map(s=>({...s,session:'2026/2027'})),[],lecturers,['a','b'],department),balancedAllocation(ids,students,[],lecturers.map(l=>({...l,displayName:l.displayName+' new'})),['a','b'],department),balancedAllocation(ids,students,[project('new','a')],lecturers,['a','b'],department)])assert.notEqual(base.fingerprint,changed.fingerprint);});
 test('duplicate selections are assigned once and unselected lecturers receive no new allocations',()=>{const result=balancedAllocation(['s0','s0','s1'],students,[],lecturers,['b','b'],department);assert.equal(result.rows.length,2);assert.ok(result.rows.every(r=>r.supervisorId==='b'));assert.equal(result.workloads.length,1);});
+
+test('per-lecturer maximums include existing active work and never silently allocate a partial cohort',()=>{
+ const projects=[project('old0','a'),project('old1','a')];
+ const plan=balancedAllocation(ids,students,projects,lecturers,['a','b'],department,{a:'3',b:'5'});
+ assert.deepEqual(plan.issues,[]);assert.deepEqual(plan.workloads.map(w=>[w.before,w.after]),[[2,3],[0,5]]);assert.equal(plan.rows.length,6);
+ const insufficient=balancedAllocation(ids,students,projects,lecturers,['a','b'],department,{a:'3',b:'4'});assert.ok(insufficient.issues.some(i=>i.includes('Not enough capacity')));assert.equal(insufficient.rows.length,0);
+ const noNew=balancedAllocation(ids,students,projects,lecturers,['a','b'],department,{a:'0'});assert.ok(noNew.rows.every(r=>r.supervisorId==='b'));assert.equal(noNew.workloads[0].after,2);
+});
+test('invalid maximums block allocation and a changed maximum or displayed CGPA requires fresh review',()=>{
+ for(const value of ['-1','2.5','1001','NaN','1e2']){const p=balancedAllocation(ids,students,[],lecturers,['a'],department,{a:value});assert.ok(p.issues.length,value);assert.equal(p.rows.length,0);}
+ const base=balancedAllocation(ids,students,[],lecturers,['a','b'],department);
+ assert.notEqual(base.fingerprint,balancedAllocation(ids,students,[],lecturers,['a','b'],department,{a:'20'}).fingerprint);
+ assert.notEqual(base.fingerprint,balancedAllocation(ids,students.map(s=>({...s,currentCGPA:3.5})),[],lecturers,['a','b'],department).fingerprint);
+ assert.equal(base.fingerprint,balancedAllocation(ids,students,[],lecturers,['b','a'],department,{unused:'0'}).fingerprint);
+});
+test('200 students fit eight distinct workload limits and every assignment remains deterministic',()=>{
+ const cohort=Array.from({length:200},(_,i)=>({...students[0],id:'bulk'+i,matricNumber:String(i).padStart(4,'0')}));
+ const staff=Array.from({length:8},(_,i)=>({id:'l'+i,displayName:'Lecturer '+i})),caps=Object.fromEntries(staff.map((l,i)=>[l.id,String(18+i*2)]));
+ const plan=balancedAllocation(cohort.map(s=>s.id),cohort,[],staff,staff.map(l=>l.id),department,caps);
+ assert.deepEqual(plan.issues,[]);assert.equal(plan.rows.length,200);assert.equal(new Set(plan.rows.map(r=>r.studentId)).size,200);assert.ok(plan.workloads.every(w=>w.after<=Number(caps[w.id])));
+ const reversed=balancedAllocation(cohort.map(s=>s.id).reverse(),cohort.slice().reverse(),[],staff.slice().reverse(),staff.map(l=>l.id).reverse(),department,caps);assert.equal(plan.fingerprint,reversed.fingerprint);
+});
