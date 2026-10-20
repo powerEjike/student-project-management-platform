@@ -1,7 +1,7 @@
 import type{Student,Project,Lecturer}from'./models.ts';
 export function balancedAllocation(ids:string[],students:Student[],projects:Project[],lecturers:Lecturer[],participants:string[],departmentId:string){
  const issues:string[]=[];const selected=[...new Set(ids)],pool=[...new Set(participants)].sort().map(id=>lecturers.find(l=>l.id===id));
- if(!selected.length||selected.length>100)issues.push('Select between 1 and 100 unassigned students.');
+ if(!selected.length||selected.length>1000)issues.push('Select between 1 and 1000 unassigned students.');
  if(!pool.length||pool.some(l=>!l))issues.push('Choose available lecturers for the proposal.');
  const chosen=selected.map(id=>students.find(s=>s.id===id));
  if(chosen.some(s=>!s||s.departmentId!==departmentId))issues.push('A selected student is unavailable in this department.');

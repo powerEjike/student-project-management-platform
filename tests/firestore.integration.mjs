@@ -605,3 +605,22 @@ test('shared open status is unavailable in group/general chats and loses access 
  let original;await env.withSecurityRulesDisabled(async c=>{const ref=doc(c.firestore(),'staff','co');original=(await getDoc(ref)).data();await updateDoc(ref,{departmentId:'dept-b'});});
  try{await assertFails(getDoc(doc(co,'chats','open-direct','openStates','sup')));await assertFails(setDoc(doc(co,'chats','open-direct','openStates','co'),value));}finally{await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'staff','co'),original);});}
 });
+
+
+test('supervisor explicitly creates an assigned folder once without changing allocation or student details',async()=>{
+ const id='simple-folder';await seedWorkflow(id);
+ const open=uid=>updateDoc(doc(env.authenticatedContext(uid).firestore(),'projects',id),{folderCreatedAt:serverTimestamp(),folderCreatedBy:uid,updatedBy:uid,updatedAt:serverTimestamp()});
+ for(const uid of ['hod-a','admin','co','other','foreign','unknown'])await assertFails(open(uid));
+ await assertFails(updateDoc(doc(env.authenticatedContext('sup').firestore(),'projects',id),{folderCreatedAt:serverTimestamp(),folderCreatedBy:'other',updatedBy:'sup',updatedAt:serverTimestamp()}));
+ await assertSucceeds(open('sup'));const ref=doc(env.authenticatedContext('sup').firestore(),'projects',id);const saved=(await getDoc(ref)).data();assert.equal(saved.folderCreatedBy,'sup');assert.equal(saved.supervisorId,'sup');assert.equal(saved.title,'');
+ await assertFails(open('sup'));await assertFails(updateDoc(ref,{folderCreatedBy:'other'}));await assertFails(updateDoc(ref,{folderCreatedAt:null}));
+});
+
+test('approved topic revisions preserve milestones and allocation and require a fresh atomic immutable audit',async()=>{
+ const id='simple-topic-revision';await seedWorkflow(id);await topicDecision(id);const db=env.authenticatedContext('sup').firestore(),ref=doc(db,'projects',id),before=(await getDoc(ref)).data();
+ async function revise(uid='sup',event='revised',extra={},history=true){const d=env.authenticatedContext(uid).firestore(),r=doc(d,'projects',id),b=writeBatch(d);b.update(r,{title:'Revised synthetic title',abstract:'',decisionNote:'Topic updated by supervisor',topicApprovedBy:uid,topicApprovedAt:serverTimestamp(),lastSupervisorUpdateAt:serverTimestamp(),lastTopicEventId:event,updatedBy:uid,updatedAt:serverTimestamp(),...extra});if(history)b.set(doc(r,'topicHistory',event),{title:'Revised synthetic title',abstract:'',decision:'Approved',note:'Topic updated by supervisor',previousDecision:'Approved',actorId:uid,actorName:uid,createdAt:serverTimestamp()});return b.commit();}
+ for(const uid of['hod-a','co','admin','other','foreign','unknown'])await assertFails(revise(uid));await assertFails(revise('sup','no-history',{},false));await assertFails(revise('sup','reset',{milestones:{}}));await assertFails(revise('sup','change-owner',{supervisorId:'other'}));
+ await assertSucceeds(revise());const after=(await getDoc(ref)).data();assert.equal(after.title,'Revised synthetic title');assert.equal(after.abstract,'');assert.deepEqual(after.milestones,before.milestones);assert.equal(after.supervisorId,before.supervisorId);assert.equal(after.lastAllocationEventId,before.lastAllocationEventId);
+ await assertFails(updateDoc(doc(db,'projects',id,'topicHistory','revised'),{note:'Changed'}));await assertFails(revise('sup','revised'));
+ await env.withSecurityRulesDisabled(async c=>updateDoc(doc(c.firestore(),'projects',id),{defenceCleared:true}));await assertFails(revise('sup','too-late',{title:'Another title'}));
+});

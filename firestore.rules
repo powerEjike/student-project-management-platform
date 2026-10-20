@@ -142,17 +142,32 @@ service cloud.firestore {
   function initialValue(m,name) { return m == {'name':name,'dueDate':m.dueDate,'status':'Not started','note':''} && m.dueDate.matches('[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'); }
   function initialStep(p,i) { return p.milestonePlan.size() <= i || initialValue(p.milestones['m'+string(i)],p.milestonePlan[i].name); }
   function initialMilestones(p) { return p.milestones is map && p.milestones.size() == p.milestonePlan.size() && initialStep(p,0) && initialStep(p,1) && initialStep(p,2) && initialStep(p,3) && initialStep(p,4) && initialStep(p,5) && initialStep(p,6) && initialStep(p,7) && initialStep(p,8) && initialStep(p,9); }
+  function folderCreate() {
+   let p=request.resource.data;
+   return primary(resource.data) && !resource.data.keys().hasAny(['folderCreatedAt','completedDate']) && !(resource.data.get('releaseState','') in ['Pending','Withheld'])
+    && p.diff(resource.data).affectedKeys().hasOnly(['folderCreatedAt','folderCreatedBy','updatedBy','updatedAt'])
+    && p.folderCreatedAt == request.time && p.folderCreatedBy == request.auth.uid && p.updatedBy == request.auth.uid && p.updatedAt == request.time;
+  }
   function topicChange(id) {
    let p=request.resource.data;
    let e=getAfter(/databases/$(database)/documents/projects/$(id)/topicHistory/$(p.lastTopicEventId)).data;
    return resource.data.get('releaseState','') != 'Withheld' && primary(resource.data) && resource.data.get('topicDecision','Awaiting topic') != 'Approved'
     && p.diff(resource.data).affectedKeys().hasOnly(['title','abstract','topicDecision','decisionNote','topicApprovedBy','topicApprovedAt','templateId','milestonePlan','milestones','status','updatedBy','updatedAt','lastSupervisorUpdateAt','lastTopicEventId'])
-    && text(p.title,300) && text(p.abstract,3000) && p.topicDecision in ['Approved','Rejected','Changes requested'] && p.decisionNote is string && p.decisionNote.size() <= 2000 && (p.topicDecision == 'Approved' || text(p.decisionNote,2000))
+    && text(p.title,300) && p.abstract is string && p.abstract.size() <= 3000 && p.topicDecision in ['Approved','Rejected','Changes requested'] && p.decisionNote is string && p.decisionNote.size() <= 2000 && (p.topicDecision == 'Approved' || text(p.decisionNote,2000))
     && p.updatedBy == request.auth.uid && p.updatedAt == request.time && p.lastSupervisorUpdateAt == request.time && text(p.lastTopicEventId,128) && e.actorId == request.auth.uid && e.createdAt == request.time
     && ((p.topicDecision == 'Approved' && p.status == 'Research in progress' && p.topicApprovedBy == request.auth.uid && p.topicApprovedAt == request.time
       && p.templateId == resource.data.departmentId + '__' + get(studentPath(id)).data.programme.upper().replace('[^A-Z0-9]','')
       && p.milestonePlan == get(/databases/$(database)/documents/milestoneTemplates/$(p.templateId)).data.steps && initialMilestones(p))
       || (p.topicDecision != 'Approved' && p.status == p.topicDecision && p.topicApprovedBy == '' && p.topicApprovedAt == null && p.templateId == '' && p.milestonePlan == [] && p.milestones == {}));
+  }
+  function topicRevision(id) {
+   let p=request.resource.data;
+   let e=getAfter(/databases/$(database)/documents/projects/$(id)/topicHistory/$(p.lastTopicEventId)).data;
+   return primary(resource.data) && resource.data.topicDecision == 'Approved' && !resource.data.get('defenceCleared',false) && !(resource.data.get('releaseState','') in ['Pending','Withheld'])
+    && p.diff(resource.data).affectedKeys().hasOnly(['title','abstract','decisionNote','topicApprovedBy','topicApprovedAt','lastSupervisorUpdateAt','lastTopicEventId','updatedBy','updatedAt'])
+    && (p.title != resource.data.title || p.abstract != resource.data.abstract) && text(p.title,300) && p.abstract is string && p.abstract.size() <= 3000
+    && text(p.decisionNote,2000) && p.topicApprovedBy == request.auth.uid && p.topicApprovedAt == request.time && p.lastSupervisorUpdateAt == request.time
+    && p.updatedBy == request.auth.uid && p.updatedAt == request.time && !exists(/databases/$(database)/documents/projects/$(id)/topicHistory/$(p.lastTopicEventId)) && e.actorId == request.auth.uid && e.createdAt == request.time;
   }
   function ethicsPath(id) { return /databases/$(database)/documents/projects/$(id)/ethics/current; }
   function ethicsPolicyPath(dept) { return /databases/$(database)/documents/ethicsPolicies/$(dept); }
@@ -486,6 +501,19 @@ service cloud.firestore {
     allow update,delete: if false;
    }
   }
+  function updateProject(id) {
+   let changed=request.resource.data.diff(resource.data).affectedKeys();
+   return changed.hasAny(['releaseState','releaseRequestId']) ? releaseChange(id)
+    : changed.hasAny(['lastFeedbackEventId','lastFeedbackBy','lastFeedbackAt']) ? feedbackChange(id)
+    : changed.hasAny(['completedDate','lastCompletionEventId']) ? completionChange(id)
+    : !resource.data.keys().hasAny(['completedDate']) && (
+      changed.hasAny(['folderCreatedAt','folderCreatedBy']) ? folderCreate()
+      : changed.hasAny(['lastTopicEventId']) ? (resource.data.get('topicDecision','') == 'Approved' ? topicRevision(id) : topicChange(id))
+      : ((!(resource.data.get('releaseState','') in ['Pending','Withheld']) && hod(resource.data.departmentId)
+        && changed.hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
+        && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
+        && allocation(request.resource.data) && event(id,request.resource.data)) || progressChange(id) || defenceChange(id)));
+  }
   match /projects/{id} {
    allow get: if hodStudent(id) || access(resource.data);
    allow list: if access(resource.data);
@@ -493,13 +521,7 @@ service cloud.firestore {
     && request.resource.data.keys().hasOnly(['departmentId','studentId','supervisorId','coSupervisorId','supervisorName','coSupervisorName','title','status','createdBy','createdAt','updatedBy','updatedAt','lastAllocationEventId'])
     && (request.resource.data.title == '' || (lecturerNew(id) && text(request.resource.data.title,300))) && request.resource.data.status == 'Awaiting topic' && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
     && allocation(request.resource.data) && event(id,request.resource.data);
-   allow update: if (request.resource.data.diff(resource.data).affectedKeys().hasAny(['releaseState','releaseRequestId']) ? releaseChange(id)
-    : request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastFeedbackEventId','lastFeedbackBy','lastFeedbackAt']) ? feedbackChange(id)
-    : request.resource.data.diff(resource.data).affectedKeys().hasAny(['completedDate','lastCompletionEventId']) ? completionChange(id)
-    : (!resource.data.keys().hasAny(['completedDate']) && ((!(resource.data.get('releaseState','') in ['Pending','Withheld']) && hod(resource.data.departmentId)
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supervisorId','coSupervisorId','supervisorName','coSupervisorName','updatedBy','updatedAt','lastAllocationEventId'])
-    && (resource.data.supervisorId != request.resource.data.supervisorId || resource.data.coSupervisorId != request.resource.data.coSupervisorId)
-    && allocation(request.resource.data) && event(id,request.resource.data)) || topicChange(id) || progressChange(id) || defenceChange(id))));
+   allow update: if updateProject(id);
    allow delete: if false;
    match /allocations/{eventId} {
     allow read: if access(get(projectPath(id)).data);

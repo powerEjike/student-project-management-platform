@@ -1,0 +1,4 @@
+import{doc,getFirestore,runTransaction,serverTimestamp}from'firebase/firestore';
+import{app,auth}from'./firebase';import{hasStudentFolder,folderCreationAllowed}from'./studentFolder';import type{Project}from'./models';
+const db=getFirestore(app!);
+export async function createStudentFolder(id:string,uid:string){if(auth?.currentUser?.uid!==uid)throw Error('Sign in again.');await runTransaction(db,async tx=>{const ref=doc(db,'projects',id),snap=await tx.get(ref);if(!snap.exists())throw Error('Student allocation no longer exists.');const p={id,...snap.data()}as Project;if(!folderCreationAllowed(p,uid))throw Error('Only the assigned supervisor can create this folder.');if(hasStudentFolder(p))return;tx.update(ref,{folderCreatedAt:serverTimestamp(),folderCreatedBy:uid,updatedBy:uid,updatedAt:serverTimestamp()});});}
