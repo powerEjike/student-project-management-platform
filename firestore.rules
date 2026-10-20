@@ -837,6 +837,50 @@ service cloud.firestore {
     && nid.matches('[a-f0-9]{64}') && request.resource.data.keys().hasOnly(['seenAt']) && request.resource.data.seenAt == request.time;
    allow delete: if false;
   }
+  // Student access is limited to a separate, explicitly published projection.
+  function portalOwner(id) {
+   let email=request.auth.token.get('email','').lower();
+   let a=get(/databases/$(database)/documents/studentPortalAccess/$(email)).data;
+   let student=get(studentPath(id)).data;
+   return signedIn() && request.auth.token.get('email_verified',false) == true && a.active == true && a.studentId == id
+    && a.email == email && a.departmentId == student.departmentId && student.email.lower() == email;
+  }
+  match /studentPortalAccess/{email} {
+   allow get: if (active() && role() == 'admin') || (signedIn() && request.auth.token.get('email_verified',false) == true && request.auth.token.get('email','').lower() == email);
+   allow list,delete: if false;
+   allow create,update: if active() && role() == 'admin'
+    && request.resource.data.keys().hasOnly(['studentId','departmentId','email','active','updatedBy','updatedAt'])
+    && request.resource.data.studentId is string && exists(studentPath(request.resource.data.studentId))
+    && request.resource.data.departmentId == get(studentPath(request.resource.data.studentId)).data.departmentId
+    && email == get(studentPath(request.resource.data.studentId)).data.email.lower() && email.size() > 3
+    && request.resource.data.email == email && request.resource.data.active is bool
+    && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+    && (!exists(/databases/$(database)/documents/studentPortalAccess/$(email)) || request.resource.data.studentId == resource.data.studentId);
+  }
+  function publishedStage(stages,p,index) {
+   return stages.size() <= index || (stages[index].keys().hasOnly(['name','status','dueDate'])
+    && stages[index].name == p.milestones['m'+string(index)].name
+    && stages[index].status == p.milestones['m'+string(index)].status
+    && stages[index].dueDate == p.milestones['m'+string(index)].dueDate);
+  }
+  match /studentPortalViews/{id} {
+   function safeView(r) {
+    let p=get(projectPath(id)).data;let student=get(studentPath(id)).data;
+    return active() && primary(p)
+     && r.keys().hasOnly(['studentId','departmentId','name','matricNumber','session','programme','supervisorName','topic','topicDecision','projectStatus','stages','feedback','publishedBy','publishedAt'])
+     && r.studentId == id && p.studentId == id && r.departmentId == p.departmentId && student.departmentId == p.departmentId
+     && r.name == student.name && r.matricNumber == student.matricNumber && r.session == student.session && r.programme == student.programme
+     && r.supervisorName == p.supervisorName && r.topic == p.title && r.topicDecision == p.get('topicDecision','')
+     && r.projectStatus == (p.get('completedDate','') != '' ? 'Archived' : p.get('defenceCleared',false) ? 'Completed — ready for defence' : p.status)
+     && r.stages is list && r.stages.size() == p.get('milestones',{}).size() && r.stages.size() <= 10
+     && publishedStage(r.stages,p,0) && publishedStage(r.stages,p,1) && publishedStage(r.stages,p,2) && publishedStage(r.stages,p,3) && publishedStage(r.stages,p,4)
+     && publishedStage(r.stages,p,5) && publishedStage(r.stages,p,6) && publishedStage(r.stages,p,7) && publishedStage(r.stages,p,8) && publishedStage(r.stages,p,9)
+     && r.feedback is string && r.feedback.size() <= 4000 && r.publishedBy == request.auth.uid && r.publishedAt == request.time;
+   }
+   allow get: if (signedIn() && portalOwner(id)) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
+   allow list,delete: if false;
+   allow create,update: if safeView(request.resource.data);
+  }
   match /{document=**} { allow read,write: if false; }
  }
 }

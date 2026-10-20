@@ -43,3 +43,5 @@ button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.st
 @media(max-width:650px){.floating-staff-chat{right:16px;bottom:max(16px,env(safe-area-inset-bottom))}.floating-chat-panel{width:calc(100vw - 32px);height:calc(100dvh - 108px)}.floating-chat-launcher{width:56px;height:56px}}
 
 .chat-colleague-picker{margin:18px 0;border:1px solid #dce5d8;border-radius:8px;padding:14px}.chat-colleague-results{display:grid;gap:12px;max-height:200px;overflow:auto;padding:12px 0}.chat-selected-colleagues{margin:12px 0;font-size:12px}.chat-selected-colleagues>button{margin-left:12px}.chat-selected-colleagues p{overflow-wrap:anywhere}
+
+.student-entry{max-width:480px;margin:40px auto;padding:30px}.student-portal{max-width:1000px;margin:auto;padding:30px 22px}.student-portal>header{display:flex;justify-content:space-between;align-items:center}.student-portal h1{font-size:30px}.student-entry .secondary{margin-top:20px}@media(max-width:520px){.student-entry{margin:16px;padding:24px}.student-entry .form-actions{flex-wrap:wrap}.student-portal{padding:20px 14px}}

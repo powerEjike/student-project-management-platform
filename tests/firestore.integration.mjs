@@ -624,3 +624,35 @@ test('approved topic revisions preserve milestones and allocation and require a 
  await assertFails(updateDoc(doc(db,'projects',id,'topicHistory','revised'),{note:'Changed'}));await assertFails(revise('sup','revised'));
  await env.withSecurityRulesDisabled(async c=>updateDoc(doc(c.firestore(),'projects',id),{defenceCleared:true}));await assertFails(revise('sup','too-late',{title:'Another title'}));
 });
+
+
+test('student portal grants verified invited accounts only their published update and never raw staff project data',async()=>{
+ const id='portal-own';await seedWorkflow(id);await topicDecision(id);await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'students',id),{email:'student@example.edu',name:'Synthetic student',matricNumber:'TEST/001',session:'2025/2026'});await updateDoc(doc(c.firestore(),'projects',id),{supervisorName:'sup'});});
+ const admin=env.authenticatedContext('admin').firestore();
+ const invitation={studentId:id,departmentId:'dept-a',email:'student@example.edu',active:true,updatedBy:'admin',updatedAt:serverTimestamp()};
+ await assertSucceeds(setDoc(doc(admin,'studentPortalAccess','student@example.edu'),invitation));
+ for(const uid of['sup','hod-a','unknown'])await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'studentPortalAccess','student@example.edu'),{...invitation,updatedBy:uid}));
+ const student=env.authenticatedContext('portal-user',{email:'student@example.edu',email_verified:true}).firestore();
+ await assertSucceeds(getDoc(doc(student,'studentPortalAccess','student@example.edu')));await assertFails(getDoc(doc(env.authenticatedContext('unverified-invite',{email:'student@example.edu',email_verified:false}).firestore(),'studentPortalAccess','student@example.edu')));await assertSucceeds(getDoc(doc(student,'studentPortalViews',id)));
+ const {studentPublication}=await import('../src/studentPublication.ts');let snapshot;await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();snapshot=studentPublication({id,...(await getDoc(doc(db,'projects',id))).data()},{id,...(await getDoc(doc(db,'students',id))).data()},'Student-visible guidance');});
+ const sup=env.authenticatedContext('sup').firestore(),ref=doc(sup,'studentPortalViews',id),view={...snapshot,publishedBy:'sup',publishedAt:serverTimestamp()};
+ await assertSucceeds(setDoc(ref,view));await assertSucceeds(getDoc(doc(student,'studentPortalViews',id)));
+ for(const db of[env.unauthenticatedContext().firestore(),env.authenticatedContext('not-verified',{email:'student@example.edu',email_verified:false}).firestore(),env.authenticatedContext('wrong-email',{email:'other@example.edu',email_verified:true}).firestore()])await assertFails(getDoc(doc(db,'studentPortalViews',id)));
+ for(const path of[['projects',id],['students',id],['projects',id,'feedback','private'],['staff','sup'],['chats','general__dept-a']])await assertFails(getDoc(doc(student,...path)));
+ await assertFails(getDocs(collection(student,'studentPortalViews')));await assertFails(getDoc(doc(student,'studentPortalViews','someone-else')));await assertFails(setDoc(doc(student,'studentPortalViews',id),view));await assertFails(updateDoc(doc(student,'studentPortalAccess','student@example.edu'),{active:true}));
+ for(const change of[{topic:'Forged topic'},{name:'Another student'},{privateNotes:'Leaked'},{publishedBy:'hod-a'},{feedback:'x'.repeat(4001)},{stages:[{name:'Forged',status:'Completed',dueDate:'2026-01-01',note:'Private'}]}])await assertFails(setDoc(ref,{...view,...change}));
+ for(const uid of['co','hod-a','admin','other'])await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'studentPortalViews',id),{...view,publishedBy:uid}));
+ await assertSucceeds(updateDoc(doc(admin,'studentPortalAccess','student@example.edu'),{active:false,updatedAt:serverTimestamp()}));await assertFails(getDoc(doc(student,'studentPortalViews',id)));
+ await assertSucceeds(updateDoc(doc(admin,'studentPortalAccess','student@example.edu'),{active:true,updatedAt:serverTimestamp()}));
+ await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'students',id),{email:'changed@example.edu'});});await assertFails(getDoc(doc(student,'studentPortalViews',id)));
+});
+
+test('student publication validates ten sanitized stages and does not let access records move to another roster identity',async()=>{
+ const id='portal-ten';const steps=Array.from({length:10},(_,i)=>({name:'Stage '+i,days:14+i}));await seedWorkflow(id,steps);await topicDecision(id,'sup',{steps});
+ await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await updateDoc(doc(db,'students',id),{name:'Ten-stage student',matricNumber:'TEN/001',session:'2025/2026',email:'ten@example.edu'});await updateDoc(doc(db,'projects',id),{supervisorName:'sup'});});
+ const {studentPublication}=await import('../src/studentPublication.ts');let snapshot;await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();snapshot=studentPublication({id,...(await getDoc(doc(db,'projects',id))).data()},{id,...(await getDoc(doc(db,'students',id))).data()},'Public feedback');});
+ const db=env.authenticatedContext('sup').firestore(),view={...snapshot,publishedBy:'sup',publishedAt:serverTimestamp()};await assertSucceeds(setDoc(doc(db,'studentPortalViews',id),view));
+ await assertFails(setDoc(doc(db,'studentPortalViews',id),{...view,stages:view.stages.map((s,i)=>i===9?{...s,note:'Private note'}:s)}));await assertFails(setDoc(doc(db,'studentPortalViews',id),{...view,stages:view.stages.slice(0,9)}));
+ const admin=env.authenticatedContext('admin').firestore();const ref=doc(admin,'studentPortalAccess','ten@example.edu');await assertSucceeds(setDoc(ref,{studentId:id,departmentId:'dept-a',email:'ten@example.edu',active:true,updatedBy:'admin',updatedAt:serverTimestamp()}));
+ await assertFails(updateDoc(ref,{studentId:'portal-own',departmentId:'dept-b',updatedAt:serverTimestamp()}));
+});
