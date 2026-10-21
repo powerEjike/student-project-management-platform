@@ -1,0 +1,3 @@
+export type RegistrationSession={id:string;departmentName:string;session:string};
+export function validAcademicSession(value:string){return /^\d{4}\/\d{4}$/.test(value)&&Number(value.slice(5))===Number(value.slice(0,4))+1;}
+export function configuredStudentDetails(input:{name:string;matricNumber:string},id:string,options:RegistrationSession[]){const current=options.find(option=>option.id===id);if(!current||!validAcademicSession(current.session))throw Error('Choose a department with an active academic session.');return{...input,departmentId:current.id,departmentName:current.departmentName,session:current.session};}

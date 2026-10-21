@@ -1,17 +1,18 @@
 import DepartmentStaffOverview from'./DepartmentStaffOverview';
 import{useEffect,useRef,useState,type ReactNode}from'react';import type{StaffProfile}from'./models';
 type Department={id:string;name:string};
-type Section='overview'|'staff'|'students'|'policies'|'templates'|'activity';
+type Section='overview'|'staff'|'students'|'policies'|'templates'|'activity'|'sessions';
 const sections:{id:Section;label:string;description:string}[]=[
  {id:'overview',label:'Overview',description:'Choose the administration task you want to work on.'},
  {id:'staff',label:'Departments & staff',description:'Create departments, manage staff access and prepare onboarding batches.'},
+ {id:'sessions',label:'Academic sessions',description:'Set the current session used for new student registrations.'},
  {id:'students',label:'Student records',description:'Upload rosters and maintain student email addresses. The HOD assigns supervisors.'},
  {id:'policies',label:'Department policies',description:'Select one department to review its workload, intake, notices and supervision settings.'},
  {id:'templates',label:'Milestone templates',description:'Configure the stages used when topics are approved for each programme.'},
  {id:'activity',label:'Activity log',description:'Review recorded staff-access changes and student import batches.'}
 ];
-type Props={onStaffDepartment:(id:string)=>void;departments:Department[];directory:(StaffProfile&{id:string})[];departmentsReady:boolean;directoryReady:boolean;busy:boolean;staffPanel:ReactNode;studentsPanel:ReactNode;templatesPanel:ReactNode;activityPanel:ReactNode;policyPanel:(department:Department)=>ReactNode};
-export default function AdminControlCentre({onStaffDepartment,departments,directory,departmentsReady,directoryReady,busy,staffPanel,studentsPanel,templatesPanel,activityPanel,policyPanel}:Props){
+type Props={sessionsPanel:ReactNode;onStaffDepartment:(id:string)=>void;departments:Department[];directory:(StaffProfile&{id:string})[];departmentsReady:boolean;directoryReady:boolean;busy:boolean;staffPanel:ReactNode;studentsPanel:ReactNode;templatesPanel:ReactNode;activityPanel:ReactNode;policyPanel:(department:Department)=>ReactNode};
+export default function AdminControlCentre({sessionsPanel,onStaffDepartment,departments,directory,departmentsReady,directoryReady,busy,staffPanel,studentsPanel,templatesPanel,activityPanel,policyPanel}:Props){
  const[section,setSection]=useState<Section>('overview'),[departmentId,setDepartmentId]=useState('');const heading=useRef<HTMLHeadingElement>(null),first=useRef(true);
  useEffect(()=>{if(first.current){first.current=false;return;}heading.current?.focus();},[section]);
  useEffect(()=>{if(departmentId&&!departments.some(d=>d.id===departmentId))setDepartmentId('');},[departmentId,departments]);
@@ -22,7 +23,7 @@ export default function AdminControlCentre({onStaffDepartment,departments,direct
  <div className="section-heading"><div><h3 ref={heading} tabIndex={-1} id="admin-section-heading">{current.label}</h3><p>{current.description}</p></div></div><p className="muted">Save your changes before leaving a section.</p>
  <div aria-labelledby="admin-section-heading" role="region">
  {section==='overview'&&<><DepartmentStaffOverview departments={departments} directory={directory} ready={departmentsReady&&directoryReady} busy={busy} onOpen={id=>{onStaffDepartment('department:'+id);setSection('staff');}}/><div className="admin-task-grid">{sections.filter(s=>s.id!=='overview').map(s=><article className="panel admin-task" key={s.id}><h3>{s.label}</h3><p>{s.description}</p><button type="button" className="secondary" onClick={()=>setSection(s.id)}>Open {s.label.toLowerCase()}</button></article>)}</div><p className="notice">Current build: shared file storage and automatic email delivery are not connected. Review files open locally, and reminder emails are prepared as drafts for manual sending. Staff account provisioning and encrypted backup exports use trusted operator tooling.</p>{departmentsReady&&!departments.length&&<p>Create your first department in Departments &amp; staff before configuring programmes and policies.</p>}{directoryReady&&departmentsReady&&unassigned.length>0&&<p className="notice">{unassigned.length} active staff record{unassigned.length===1?' needs':'s need'} a valid department assignment. Review these records in Departments &amp; staff.</p>}</>}
- {section==='staff'&&staffPanel}{section==='students'&&studentsPanel}{section==='templates'&&templatesPanel}{section==='activity'&&activityPanel}
+ {section==='sessions'&&sessionsPanel}{section==='staff'&&staffPanel}{section==='students'&&studentsPanel}{section==='templates'&&templatesPanel}{section==='activity'&&activityPanel}
  {section==='policies'&&<><section className="panel"><label htmlFor="admin-policy-department">Department for policy settings</label><select id="admin-policy-department" value={departmentId} disabled={!departmentsReady||busy} onChange={e=>setDepartmentId(e.target.value)}><option value="">Choose a department</option>{departments.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><p className="muted">Save a policy form before choosing another department. Settings and their histories below belong to the selected department only.</p></section>{departmentsReady&&selectedDepartment?<div key={selectedDepartment.id}>{policyPanel(selectedDepartment)}</div>:<p>{!departmentsReady?'Department details could not yet be verified.':departments.length?'Choose a department to load its policy settings.':'Create a department in Departments & staff first.'}</p>}</>}
  </div></section>;
 }

@@ -301,6 +301,37 @@ service cloud.firestore {
     && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
    allow update,delete: if false;
   }
+  match /academicSessions/{dept} {
+   function path() { return /databases/$(database)/documents/academicSessions/$(dept); }
+   function previous() { return exists(path()) ? get(path()).data : {'session':'','departmentName':'','revision':''}; }
+   function valid(r) { return r.keys().hasOnly(['departmentName','session','revision','updatedBy','actorName','updatedAt'])
+    && r.session is string && r.session.matches('[0-9]{4}/[0-9]{4}') && int(r.session.split('/')[1]) == int(r.session.split('/')[0])+1
+    && r.departmentName == get(/databases/$(database)/documents/departments/$(dept)).data.name
+    && text(r.revision,128) && r.updatedBy == request.auth.uid && r.actorName == get(self()).data.displayName && r.updatedAt == request.time; }
+   allow read: if active() && role() == 'admin';
+   allow create,update: if active() && role() == 'admin' && exists(/databases/$(database)/documents/departments/$(dept)) && valid(request.resource.data)
+    && (request.resource.data.session != previous().session || request.resource.data.departmentName != previous().departmentName)
+    && !exists(/databases/$(database)/documents/academicSessions/$(dept)/history/$(request.resource.data.revision))
+    && getAfter(/databases/$(database)/documents/academicSessions/$(dept)/history/$(request.resource.data.revision)).data.diff(request.resource.data).affectedKeys().hasOnly(['previousSession','previousRevision','previousDepartmentName'])
+    && getAfter(/databases/$(database)/documents/registrationSessions/$(dept)).data.session == request.resource.data.session
+    && getAfter(/databases/$(database)/documents/registrationSessions/$(dept)).data.departmentName == request.resource.data.departmentName;
+   allow delete: if false;
+   match /history/{event} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin' && getAfter(path()).data.revision == event && getAfter(path()).data.updatedAt == request.time && getAfter(path()).data.revision != previous().revision
+     && request.resource.data.diff(getAfter(path()).data).affectedKeys().hasOnly(['previousSession','previousRevision','previousDepartmentName'])
+     && request.resource.data.previousSession == previous().session && request.resource.data.previousRevision == previous().revision && request.resource.data.previousDepartmentName == previous().departmentName;
+    allow update,delete: if false;
+   }
+  }
+  match /registrationSessions/{dept} {
+   allow read: if true;
+   allow create,update: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentName','session'])
+    && getAfter(/databases/$(database)/documents/academicSessions/$(dept)).data.updatedAt == request.time
+    && request.resource.data.session == getAfter(/databases/$(database)/documents/academicSessions/$(dept)).data.session
+    && request.resource.data.departmentName == getAfter(/databases/$(database)/documents/academicSessions/$(dept)).data.departmentName;
+   allow delete: if false;
+  }
   match /departments/{id} {
    allow read: if active() && (role() == 'admin' || same(id));
    allow create: if active() && role() == 'admin' && id.matches('[a-z0-9-]{1,100}') && request.resource.data.keys().hasOnly(['name','createdBy','createdAt']) && text(request.resource.data.name,120) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
@@ -859,11 +890,15 @@ service cloud.firestore {
    }
    allow get: if own() || (active() && role() == 'admin');
    allow list: if active() && role() == 'admin';
-   allow create: if own() && request.resource.data.keys().hasOnly(['name','matricNumber','matricKey','session','departmentName','email','status','createdAt'])
+   allow create: if own() && request.resource.data.keys().hasOnly(['name','matricNumber','matricKey','session','departmentName','departmentId','email','status','createdAt'])
     && text(request.resource.data.name,120) && text(request.resource.data.matricNumber,80) && text(request.resource.data.matricKey,80)
     && request.resource.data.matricKey.matches('[A-Z0-9]+') && text(request.resource.data.departmentName,120)
     && request.resource.data.session is string && request.resource.data.session.matches('[0-9]{4}/[0-9]{4}')
     && request.resource.data.email == request.auth.token.get('email','').lower() && request.resource.data.email.size() > 3
+    && request.resource.data.departmentId is string && request.resource.data.departmentId.matches('[a-z0-9-]{1,100}')
+    && exists(/databases/$(database)/documents/registrationSessions/$(request.resource.data.departmentId))
+    && request.resource.data.session == get(/databases/$(database)/documents/registrationSessions/$(request.resource.data.departmentId)).data.session
+    && request.resource.data.departmentName == get(/databases/$(database)/documents/registrationSessions/$(request.resource.data.departmentId)).data.departmentName
     && request.resource.data.status == 'Pending' && request.resource.data.createdAt == request.time;
    allow update: if decision(request.resource.data);
    allow delete: if false;
