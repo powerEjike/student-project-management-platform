@@ -1,7 +1,8 @@
 import type{Project,Student}from'./models';import{hasStudentFolder}from'./studentFolder.ts';import{validCompletionDate}from'./completion.ts';
-export type HodFilter='all'|'unassigned'|'folder'|'topic'|'overdue'|'ready'|'active'|'paused'|'archived';
+export type HodFilter='all'|'allocated'|'unassigned'|'folder'|'topic'|'overdue'|'ready'|'active'|'paused'|'archived';
 export function hodMatches(project:Project|undefined,filter:HodFilter,today:string){
  if(filter==='all')return true;if(filter==='unassigned')return !project;if(!project)return false;
+ if(filter==='allocated')return !project.completedDate&&project.releaseState!=='Withheld';
  const archived=!!project.completedDate,paused=!archived&&['Pending','Withheld'].includes(project.releaseState||''),active=!archived&&!paused;
  if(filter==='archived')return archived;if(filter==='paused')return paused;
  if(filter==='ready'){try{return !archived&&project.releaseState!=='Withheld'&&!!project.defenceCleared&&!!project.defenceDate?.toDate&&!Number.isNaN(project.defenceDate.toDate().getTime());}catch{return false;}}
