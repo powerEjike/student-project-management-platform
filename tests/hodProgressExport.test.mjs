@@ -1,0 +1,10 @@
+import test from'node:test';import assert from'node:assert/strict';import ExcelJS from'exceljs';import{hodProgressWorkbook}from'../src/hodProgressExport.ts';
+test('HOD workbook includes every filtered student, report context and stage summary without private notes',async()=>{
+ const students=Array.from({length:31},(_,i)=>({id:'s'+i,name:i?'Student '+i:'=literal name',matricNumber:'000'+i,session:'2025/2026',programme:'Biochemistry',level:'Final year',email:'private@example.com',currentCGPA:3.5}));
+ const projects=[{studentId:'s0',title:'Enzyme activity',supervisorName:'Roland',status:'In progress',decisionNote:'PRIVATE DECISION',milestones:{m0:{name:'Abstract',status:'Completed',note:'PRIVATE NOTE'},m1:{name:'Introduction',status:'Under review',dueDate:'2026-10-30',note:'PRIVATE NOTE'}}},{studentId:'outside',title:'UNRELATED PROJECT'}];
+ const bytes=await hodProgressWorkbook(students,projects,'Biochemistry',{Session:'2025/2026',Supervisor:'All'},new Date('2026-10-20T23:30:00Z'));const book=new ExcelJS.Workbook();await book.xlsx.load(bytes);const sheet=book.getWorksheet('Student progress');
+ assert.equal(sheet.rowCount,35);assert.match(sheet.getCell('A2').value,/Session: 2025\/2026/);assert.match(sheet.getCell('A3').value,/21\/10\/2026/);
+ assert.equal(sheet.getCell('A5').value,'=literal name');assert.equal(sheet.getCell('A5').type,ExcelJS.ValueType.String);assert.equal(sheet.getCell('B5').value,'0000');assert.equal(sheet.getCell('I5').value,1);assert.equal(sheet.getCell('J5').value,2);assert.equal(sheet.getCell('K5').value,'Introduction');assert.equal(sheet.getCell('N5').value,'Unknown');assert.equal(sheet.getCell('F6').value,'Unassigned');assert.equal(sheet.getCell('H6').value,'Awaiting allocation');assert.equal(sheet.getCell('A35').value,'Student 30');
+ const values=JSON.stringify(sheet.getSheetValues());for(const secret of['PRIVATE NOTE','PRIVATE DECISION','private@example.com','UNRELATED PROJECT'])assert.equal(values.includes(secret),false);
+ assert.equal(sheet.views[0].ySplit,4);
+});
