@@ -28,3 +28,14 @@ test('HOD search combines name registration topic and supervisor without case se
  assert.equal(hodSearch(student,project,'enzyme glucose'),false);
  assert.equal(hodSearch(student,undefined,''),true);
 });
+import {hodProgress} from '../src/hodOverview.ts';
+test('HOD next stage follows template order even when later stages finish first',()=>{
+ const p={milestones:{m2:{name:'Methods',status:'Completed'},m1:{name:'Introduction',status:'Under review',dueDate:'2026-10-30'},m0:{name:'Abstract',status:'Completed'},m10:{name:'Final draft',status:'Not started'}}};
+ const result=hodProgress(p);assert.equal(result.complete,2);assert.equal(result.next.name,'Introduction');assert.deepEqual(result.stages.map(s=>s.name),['Abstract','Introduction','Methods','Final draft']);
+ for(const changes of[{completedDate:'2026-10-20'},{defenceCleared:true},{releaseState:'Pending'},{releaseState:'Withheld'}])assert.equal(hodProgress({...p,...changes}).next,undefined);
+ assert.equal(hodProgress(undefined).next,undefined);assert.equal(hodProgress({milestones:{m0:{status:'Completed'}}}).next,undefined);
+});
+test('HOD last progress date uses Nigerian time and missing evidence stays unknown',()=>{
+ assert.equal(hodProgress({lastSupervisorUpdateAt:{toDate:()=>new Date('2026-10-20T23:30:00Z')}}).updated,'21 Oct 2026');
+ for(const lastSupervisorUpdateAt of[undefined,{toDate:()=>new Date('invalid')},{toDate:()=>{throw Error('Invalid timestamp')}}])assert.equal(hodProgress({lastSupervisorUpdateAt}).updated,'');
+});
