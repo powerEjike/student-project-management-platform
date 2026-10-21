@@ -841,13 +841,15 @@ service cloud.firestore {
    function own() { return signedIn() && uid == request.auth.uid; }
    function decision(r) {
     return active() && role() == 'admin' && resource.data.status == 'Pending'
-     && r.diff(resource.data).affectedKeys().hasOnly(['status','studentId','departmentId','reason','reviewedBy','reviewedAt'])
+     && r.diff(resource.data).affectedKeys().hasOnly(['status','studentId','departmentId','reason','reviewedBy','reviewedAt','session','submittedSession','sessionCorrected'])
+     && ((r.session == resource.data.session && !r.diff(resource.data).affectedKeys().hasAny(['submittedSession','sessionCorrected']))
+      || (r.status == 'Approved' && r.session != resource.data.session && r.submittedSession == resource.data.session && r.sessionCorrected == true))
      && r.reviewedBy == request.auth.uid && r.reviewedAt == request.time && r.reason is string && r.reason.size() <= 500
      && ((r.status == 'Rejected' && r.reason.trim().size() > 0 && r.studentId == '' && r.departmentId == '')
       || (r.status == 'Approved' && r.studentId is string && exists(studentPath(r.studentId))
        && getAfter(studentPath(r.studentId)).data.departmentId == r.departmentId
        && getAfter(studentPath(r.studentId)).data.matricKey == resource.data.matricKey
-       && getAfter(studentPath(r.studentId)).data.session == resource.data.session
+       && getAfter(studentPath(r.studentId)).data.session == r.session
        && getAfter(studentPath(r.studentId)).data.email.lower() == resource.data.email
        && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.active == true
        && getAfter(/databases/$(database)/documents/studentPortalAccess/$(resource.data.email)).data.requestUid == uid

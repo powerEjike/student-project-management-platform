@@ -692,3 +692,17 @@ test('approved students reply only to their own current published feedback and c
  await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'studentPortalViews',id),{feedback:''});});await assertFails(setDoc(doc(student,'studentPortalViews',id,'replies','empty'),{...reply,feedback:'',feedbackPublishedAt:new Timestamp(101,1000)}));
  await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'studentPortalAccess',email),{active:false});});await assertFails(getDocs(collection(student,'studentPortalViews',id,'replies')));await assertFails(setDoc(doc(student,'studentPortalViews',id,'replies','revoked'),reply));
 });
+
+test('only admin can correct a submitted session during atomic roster-matched approval and original session remains immutable',async()=>{
+ const id='approval-session-correction',uid='correction-applicant',email='correction@example.edu';await seedWorkflow(id);
+ await env.withSecurityRulesDisabled(async c=>{await updateDoc(doc(c.firestore(),'students',id),{matricNumber:'COR/001',matricKey:'COR001',session:'2025/2026',email});});
+ const applicant=env.authenticatedContext(uid,{email,email_verified:true}).firestore(),admin=env.authenticatedContext('admin').firestore();
+ await assertSucceeds(setDoc(doc(applicant,'studentAccountRequests',uid),{name:'Correction Applicant',email,matricNumber:'COR/001',matricKey:'COR001',session:'2026/2027',departmentName:'Department A',status:'Pending',createdAt:serverTimestamp()}));
+ await assertFails(updateDoc(doc(applicant,'studentAccountRequests',uid),{session:'2025/2026'}));await assertFails(updateDoc(doc(admin,'studentAccountRequests',uid),{session:'2025/2026',submittedSession:'2026/2027',sessionCorrected:true}));
+ async function approve(actor='admin',changes={},withAccess=true){const db=env.authenticatedContext(actor).firestore(),batch=writeBatch(db);if(withAccess)batch.set(doc(db,'studentPortalAccess',email),{email,studentId:id,departmentId:'dept-a',active:true,requestUid:uid,updatedBy:actor,updatedAt:serverTimestamp()});batch.update(doc(db,'studentAccountRequests',uid),{status:'Approved',studentId:id,departmentId:'dept-a',reason:'Identity and roster session confirmed',reviewedBy:actor,reviewedAt:serverTimestamp(),session:'2025/2026',submittedSession:'2026/2027',sessionCorrected:true,...changes});return batch.commit();}
+ for(const actor of[uid,'sup','hod-a','other'])await assertFails(approve(actor));
+ for(const changes of[{submittedSession:'2024/2025'},{session:'2024/2025'},{sessionCorrected:false},{matricKey:'OTHER'},{email:'other@example.edu'}])await assertFails(approve('admin',changes));await assertFails(approve('admin',{},false));
+ const rejected={status:'Rejected',studentId:'',departmentId:'',reason:'Invalid details',reviewedBy:'admin',reviewedAt:serverTimestamp(),session:'2025/2026',submittedSession:'2026/2027',sessionCorrected:true};await assertFails(updateDoc(doc(admin,'studentAccountRequests',uid),rejected));
+ await assertSucceeds(approve());const saved=(await getDoc(doc(admin,'studentAccountRequests',uid))).data();assert.equal(saved.session,'2025/2026');assert.equal(saved.submittedSession,'2026/2027');assert.equal(saved.sessionCorrected,true);assert.equal(saved.matricKey,'COR001');
+ await assertFails(updateDoc(doc(admin,'studentAccountRequests',uid),{submittedSession:'2025/2026'}));await assertFails(updateDoc(doc(applicant,'studentAccountRequests',uid),{session:'2024/2025'}));
+});
