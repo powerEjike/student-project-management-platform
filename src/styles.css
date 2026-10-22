@@ -69,3 +69,8 @@ button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.st
 .review-tools{margin-top:24px;border-top:1px solid #dce3dd;padding-top:18px;}
 .review-tools>summary{cursor:pointer;font-weight:600;padding:8px 0;}
 .review-tools-body{margin-top:16px;}
+.student-publication-date{font-size:12px;opacity:.85;}
+.student-progress-summary{display:flex;justify-content:space-between;gap:16px;margin-bottom:10px;}
+.student-stage-list>summary,.student-feedback-conversation>details>summary{cursor:pointer;padding:12px 0;font-weight:600;}
+.student-feedback-conversation{margin-top:24px;border-top:1px solid #dce3dd;padding-top:20px;}
+.student-feedback-conversation h2{font-size:18px;}

@@ -1,0 +1,3 @@
+import type{StudentPublication}from'./studentPublication';
+export function studentPortalProgress(view:StudentPublication){const complete=view.stages.filter(stage=>stage.status==='Completed').length,finished=view.projectStatus==='Archived'||view.projectStatus.startsWith('Completed');return{complete,total:view.stages.length,percent:view.stages.length?Math.round(complete/view.stages.length*100):0,next:finished?undefined:view.stages.find(stage=>stage.status!=='Completed')};}
+export function publicationDate(view:StudentPublication){try{const date=view.publishedAt?.toDate();return date&&!Number.isNaN(date.getTime())?date.toLocaleString('en-GB',{timeZone:'Africa/Lagos'}):'Date not recorded';}catch{return'Date not recorded';}}
