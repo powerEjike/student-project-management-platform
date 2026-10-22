@@ -1,0 +1,1 @@
+export default function DocumentCommentDraftNotice({page,busy,onDiscard}:{page:number;busy:boolean;onDiscard:()=>void}){return <div className="notice" role="status">Unsaved comment on page {page}. Save or discard it before choosing another passage or file. <button type="button" className="text-button" disabled={busy} onClick={onDiscard}>Discard comment</button></div>;}
