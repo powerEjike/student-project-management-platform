@@ -947,19 +947,22 @@ service cloud.firestore {
   }
   match /classSessions/{sid} {
    function owner(c) { return active() && (role() == 'hod' || role() == 'lecturer') && same(c.departmentId) && c.ownerId == request.auth.uid; }
-   function reader(c) { return owner(c) || hod(c.departmentId); }
+   function reader(c) { return owner(c) || (hod(c.departmentId) && c.get('sharedWithHod',false) == true); }
    function open(c) { let host=get(/databases/$(database)/documents/staff/$(c.ownerId)).data;return host.active == true && host.role in ['hod','lecturer'] && host.departmentId == c.departmentId && c.closed == false && request.time < c.createdAt+duration.value(c.windowMinutes,'m'); }
    function student(c,id) { return portalOwner(id) && get(studentPath(id)).data.departmentId == c.departmentId && get(studentPath(id)).data.session == c.session; }
    function myStudent(c) { let email=request.auth.token.get('email','').lower();let a=get(/databases/$(database)/documents/studentPortalAccess/$(email)).data;return student(c,a.studentId); }
    allow get: if reader(resource.data) || (signedIn() && myStudent(resource.data));
    allow list: if reader(resource.data);
    allow create: if active() && (role() == 'hod' || role() == 'lecturer') && same(request.resource.data.departmentId)
-    && request.resource.data.keys().hasOnly(['departmentId','ownerId','ownerName','title','session','windowMinutes','createdAt','closed'])
+    && request.resource.data.keys().hasOnly(['departmentId','ownerId','ownerName','title','session','windowMinutes','createdAt','closed','sharedWithHod'])
     && request.resource.data.ownerId == request.auth.uid && request.resource.data.ownerName == get(self()).data.displayName
     && text(request.resource.data.title,120) && request.resource.data.title.trim().size()>0
     && request.resource.data.session is string && request.resource.data.session.matches('[0-9]{4}/[0-9]{4}') && int(request.resource.data.session.split('/')[1]) == int(request.resource.data.session.split('/')[0])+1
-    && request.resource.data.windowMinutes is int && request.resource.data.windowMinutes >= 2 && request.resource.data.windowMinutes <= 30 && request.resource.data.createdAt == request.time && request.resource.data.closed == false;
+    && request.resource.data.windowMinutes is int && request.resource.data.windowMinutes >= 2 && request.resource.data.windowMinutes <= 30 && request.resource.data.createdAt == request.time && request.resource.data.closed == false && request.resource.data.sharedWithHod == false;
    allow update: if owner(resource.data) && resource.data.closed == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['closed','closedAt']) && request.resource.data.closed == true && request.resource.data.closedAt == request.time;
+   allow update: if owner(resource.data) && request.time >= resource.data.createdAt+duration.value(120,'m')
+    && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reportGeneratedAt']) && request.resource.data.reportGeneratedAt == request.time)
+     || (resource.data.get('reportGeneratedAt',null) is timestamp && resource.data.get('sharedWithHod',false) == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sharedWithHod','sharedAt']) && request.resource.data.sharedWithHod == true && request.resource.data.sharedAt == request.time));
    allow delete: if false;
    match /keys/{key} {
     allow get: if owner(get(/databases/$(database)/documents/classSessions/$(sid)).data);
