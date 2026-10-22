@@ -1,0 +1,6 @@
+import test from'node:test';import assert from'node:assert/strict';import{attendanceReportNotices}from'../src/attendanceNoticeData.ts';
+test('HOD attendance notices derive only from sent generated department reports and use stable identities',()=>{
+ const stamp=value=>({toDate:()=>new Date(value)}),base={departmentId:'bch',ownerId:'lecturer',title:'BCH 301',ownerName:'Synthetic lecturer',session:'2025/2026',sharedWithHod:true,reportGeneratedAt:stamp('2026-10-21T10:00:00Z'),sharedAt:stamp('2026-10-22T09:00:00Z')};
+ const rows=[{...base,id:'older-class-sent-now',createdAt:stamp('2026-07-01T08:00:00Z')},{...base,id:'previous-notice',sharedAt:stamp('2026-10-21T12:00:00Z')},{...base,id:'not-sent',sharedWithHod:false},{...base,id:'not-generated',reportGeneratedAt:undefined},{...base,id:'missing-send-time',sharedAt:undefined},{...base,id:'foreign',departmentId:'other'},{...base,id:'self',ownerId:'hod'}],notices=attendanceReportNotices(rows,'bch','hod');
+ assert.deepEqual(notices.map(row=>row.sessionId),['older-class-sent-now','previous-notice']);assert.equal(notices[0].key,'attendance-report:older-class-sent-now');assert.equal(attendanceReportNotices([{...rows[0],reportGeneratedAt:stamp('2026-10-22T12:00:00Z')}],'bch','hod')[0].key,notices[0].key);
+});

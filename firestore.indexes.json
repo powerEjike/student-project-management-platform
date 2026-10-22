@@ -77,6 +77,24 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "classSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "departmentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sharedWithHod",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sharedAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

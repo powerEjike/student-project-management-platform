@@ -1,0 +1,3 @@
+import type{ClassSession}from'./classAttendanceData';
+export function attendanceReportNotices(rows:ClassSession[],departmentId:string,uid:string){return rows.filter(row=>row.departmentId===departmentId&&row.sharedWithHod===true&&!!row.sharedAt&&!!row.reportGeneratedAt&&row.ownerId!==uid).map(row=>({key:'attendance-report:'+row.id,sessionId:row.id,title:row.title,lecturerName:row.ownerName,session:row.session,sharedAt:row.sharedAt!})).sort((a,b)=>b.sharedAt.toDate().getTime()-a.sharedAt.toDate().getTime()||a.sessionId.localeCompare(b.sessionId));}
+export type AttendanceReportNotice=ReturnType<typeof attendanceReportNotices>[number]&{id:string};
