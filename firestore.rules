@@ -951,7 +951,8 @@ service cloud.firestore {
    function open(c) { let host=get(/databases/$(database)/documents/staff/$(c.ownerId)).data;return host.active == true && host.role in ['hod','lecturer'] && host.departmentId == c.departmentId && c.closed == false && request.time < c.createdAt+duration.value(c.windowMinutes,'m'); }
    function student(c,id) { return portalOwner(id) && get(studentPath(id)).data.departmentId == c.departmentId && get(studentPath(id)).data.session == c.session; }
    function myStudent(c) { let email=request.auth.token.get('email','').lower();let a=get(/databases/$(database)/documents/studentPortalAccess/$(email)).data;return student(c,a.studentId); }
-   allow get: if reader(resource.data) || (signedIn() && myStudent(resource.data));
+   function ownHistory() { let email=request.auth.token.get('email','').lower();let a=get(/databases/$(database)/documents/studentPortalAccess/$(email)).data;return portalOwner(a.studentId) && exists(/databases/$(database)/documents/classSessions/$(sid)/checkIns/$(a.studentId)); }
+   allow get: if reader(resource.data) || (signedIn() && (myStudent(resource.data) || ownHistory()));
    allow list: if reader(resource.data);
    allow create: if active() && (role() == 'hod' || role() == 'lecturer') && same(request.resource.data.departmentId)
     && request.resource.data.keys().hasOnly(['departmentId','ownerId','ownerName','title','session','windowMinutes','createdAt','closed','sharedWithHod'])
@@ -978,7 +979,7 @@ service cloud.firestore {
      let current=/databases/$(database)/documents/classSessions/$(sid)/keys/current;
      return token is string && token.matches('[a-f0-9]{32}') && ((exists(saved) && request.time < get(saved).data.issuedAt+duration.value(60,'s')) || (get(current).data.token == token && request.time < get(current).data.issuedAt+duration.value(60,'s')));
     }
-    allow get: if reader(session()) || (signedIn() && portalOwner(studentId) && myStudent(session()));
+    allow get: if reader(session()) || (signedIn() && portalOwner(studentId));
     allow list: if reader(session());
     allow create: if signedIn() && request.resource.data.studentId == studentId && request.resource.data.studentUid == request.auth.uid && request.resource.data.keys().hasOnly(['studentId','studentUid','studentName','matricNumber','token','checkedAt'])
      && student(session(),request.resource.data.studentId) && open(session())
@@ -1040,6 +1041,10 @@ service cloud.firestore {
      && request.resource.data.createdAt == request.time;
     allow update,delete: if false;
    }
+  }
+  // Collection-group queries must constrain studentId to the currently approved roster identity.
+  match /{path=**}/checkIns/{receiptId} {
+   allow list: if signedIn() && portalOwner(resource.data.studentId);
   }
   match /{document=**} { allow read,write: if false; }
  }
