@@ -962,20 +962,25 @@ service cloud.firestore {
    allow update: if owner(resource.data) && resource.data.closed == false && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['closed','closedAt']) && request.resource.data.closed == true && request.resource.data.closedAt == request.time;
    allow delete: if false;
    match /keys/{key} {
-    allow get: if key == 'current' && owner(get(/databases/$(database)/documents/classSessions/$(sid)).data);
+    allow get: if owner(get(/databases/$(database)/documents/classSessions/$(sid)).data);
     allow list,delete: if false;
-    allow create,update: if key == 'current' && owner(get(/databases/$(database)/documents/classSessions/$(sid)).data) && open(get(/databases/$(database)/documents/classSessions/$(sid)).data)
+    allow create,update: if (key == 'current' || (key.matches('[a-f0-9]{32}') && !exists(/databases/$(database)/documents/classSessions/$(sid)/keys/$(key)) && request.resource.data.token == key)) && owner(get(/databases/$(database)/documents/classSessions/$(sid)).data) && open(get(/databases/$(database)/documents/classSessions/$(sid)).data)
      && request.resource.data.keys().hasOnly(['token','issuedAt']) && request.resource.data.token is string && request.resource.data.token.matches('[a-f0-9]{32}') && request.resource.data.issuedAt == request.time;
    }
    match /checkIns/{studentId} {
     function session() { return get(/databases/$(database)/documents/classSessions/$(sid)).data; }
+    function validCode() {
+     let token=request.resource.data.token;
+     let saved=/databases/$(database)/documents/classSessions/$(sid)/keys/$(token);
+     let current=/databases/$(database)/documents/classSessions/$(sid)/keys/current;
+     return token is string && token.matches('[a-f0-9]{32}') && ((exists(saved) && request.time < get(saved).data.issuedAt+duration.value(60,'s')) || (get(current).data.token == token && request.time < get(current).data.issuedAt+duration.value(60,'s')));
+    }
     allow get: if reader(session()) || (signedIn() && portalOwner(studentId) && myStudent(session()));
     allow list: if reader(session());
     allow create: if signedIn() && request.resource.data.studentId == studentId && request.resource.data.studentUid == request.auth.uid && request.resource.data.keys().hasOnly(['studentId','studentUid','studentName','matricNumber','token','checkedAt'])
      && student(session(),request.resource.data.studentId) && open(session())
      && request.resource.data.studentName == get(/databases/$(database)/documents/studentAccountRequests/$(request.auth.uid)).data.name && request.resource.data.matricNumber == get(/databases/$(database)/documents/studentAccountRequests/$(request.auth.uid)).data.matricNumber
-     && request.resource.data.checkedAt == request.time && request.resource.data.token == get(/databases/$(database)/documents/classSessions/$(sid)/keys/current).data.token
-     && request.time < get(/databases/$(database)/documents/classSessions/$(sid)/keys/current).data.issuedAt+duration.value(60,'s');
+     && request.resource.data.checkedAt == request.time && validCode();
     allow update,delete: if false;
    }
   }
