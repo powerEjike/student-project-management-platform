@@ -493,10 +493,18 @@ service cloud.firestore {
   }
   function lecturerNew(id) { let p=getAfter(projectPath(id)).data; let s=getAfter(studentPath(id)).data; return !exists(projectPath(id)) && primary(p) && s.departmentId == get(self()).data.departmentId && s.departmentId == p.departmentId && s.createdBy == request.auth.uid && s.createdAt == request.time && p.coSupervisorId == '' && p.createdBy == request.auth.uid && p.createdAt == request.time; }
   match /rosterImports/{id} {
+   function grouped(r) { return r.keys().hasAll(['runId','sourceName','sourceRows','batchNumber','batchCount','programme','level'])
+    && r.runId is string && r.runId.matches('[a-zA-Z0-9_-]{1,128}') && id == r.runId+'_'+string(r.batchNumber)
+    && text(r.sourceName,200) && text(r.programme,80) && text(r.level,80)
+    && r.sourceRows is int && r.sourceRows >= 1 && r.sourceRows <= 1000
+    && r.batchCount is int && r.batchCount >= 1 && r.batchCount <= 100 && (r.batchCount-1)*10 < r.sourceRows && r.sourceRows <= r.batchCount*10
+    && r.batchNumber is int && r.batchNumber >= 1 && r.batchNumber <= r.batchCount
+    && r.added+r.skipped == (r.batchNumber < r.batchCount ? 10 : r.sourceRows-(r.batchCount-1)*10); }
    allow read: if active() && (role() == 'admin' || hod(resource.data.departmentId));
-   allow create: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentId','session','admissionSession','added','skipped','actorId','createdAt'])
+   allow create: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentId','session','admissionSession','added','skipped','actorId','createdAt','runId','sourceName','sourceRows','batchNumber','batchCount','programme','level'])
     && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId)) && text(request.resource.data.session,80) && text(request.resource.data.admissionSession,80)
-    && request.resource.data.added is int && request.resource.data.added > 0 && request.resource.data.added <= 10 && request.resource.data.skipped is int && request.resource.data.skipped >= 0 && request.resource.data.skipped <= 10
+    && request.resource.data.added is int && request.resource.data.added >= 0 && request.resource.data.added <= 10 && request.resource.data.skipped is int && request.resource.data.skipped >= 0 && request.resource.data.skipped <= 10
+    && (request.resource.data.keys().hasAny(['runId','sourceName','sourceRows','batchNumber','batchCount','programme','level']) ? grouped(request.resource.data) : request.resource.data.added > 0 && request.resource.data.added+request.resource.data.skipped <= 10)
     && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time;
    allow update,delete: if false;
   }

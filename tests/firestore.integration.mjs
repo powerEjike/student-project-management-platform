@@ -734,3 +734,12 @@ test('admin roster corrections require immutable before-and-after history and ca
  await assertFails(updateDoc(doc(admin,'students',id,'rosterCorrections','first'),{reason:'Rewrite'}));await assertFails(deleteDoc(doc(admin,'students',id,'rosterCorrections','first')));await assertFails(correct('admin','first'));await assertFails(correct('admin','stale'));
  const clear=writeBatch(admin),ref=doc(admin,'students',id);clear.update(ref,{currentCGPA:deleteField(),admissionSession:deleteField(),lastRosterCorrectionId:'clear',rosterCorrectedBy:'admin',rosterCorrectedAt:serverTimestamp()});clear.set(doc(ref,'rosterCorrections','clear'),{name:'Corrected Student',currentCGPA:null,admissionSession:'',previousName:'Corrected Student',previousCGPA:0,previousAdmissionSession:'2022/2023',reason:'Optional details are not confirmed',confirmed:true,actorId:'admin',actorName:'admin',createdAt:serverTimestamp()});await assertSucceeds(clear.commit());assert.equal((await getDoc(ref)).data().currentCGPA,undefined);
 });
+
+test('grouped roster import history allows all-skipped batches and rejects malformed immutable receipts',async()=>{
+ const db=env.authenticatedContext('admin').firestore(),base={departmentId:'dept-a',session:'2025/2026',admissionSession:'2022/2023',added:0,skipped:10,actorId:'admin',createdAt:serverTimestamp(),runId:'history',sourceName:'Synthetic.csv',sourceRows:15,batchNumber:1,batchCount:2,programme:'Biochemistry',level:'400'};
+ await assertSucceeds(setDoc(doc(db,'rosterImports','history_1'),base));await assertSucceeds(setDoc(doc(db,'rosterImports','history_2'),{...base,batchNumber:2,skipped:5}));
+ for(const changes of[{sourceRows:0},{batchCount:3},{batchNumber:0},{added:-1,skipped:11},{skipped:9},{programme:''},{extra:true},{runId:'bad/path'}])await assertFails(setDoc(doc(db,'rosterImports','invalid_1'),{...base,runId:'invalid',...changes}));
+ await assertFails(setDoc(doc(db,'rosterImports','wrong-id'),base));const partial={...base};delete partial.runId;await assertFails(setDoc(doc(db,'rosterImports','partial'),partial));
+ for(const uid of['sup','hod-a','unknown'])await assertFails(setDoc(doc(env.authenticatedContext(uid).firestore(),'rosterImports','history_1'),{...base,actorId:uid}));
+ await assertFails(updateDoc(doc(db,'rosterImports','history_1'),{added:1}));await assertFails(deleteDoc(doc(db,'rosterImports','history_1')));
+});
