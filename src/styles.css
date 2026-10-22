@@ -66,3 +66,6 @@ button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.st
 .folder-stage>summary::before{content:'';width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);flex-shrink:0;} .folder-stage[open]>summary::before{transform:rotate(45deg);} .folder-stage>summary>span:first-of-type{margin-right:auto;}
 
 .folder-stage>summary{position:relative;padding-left:20px;} .folder-stage>summary::before{position:absolute;left:1px;top:10px;}
+.review-tools{margin-top:24px;border-top:1px solid #dce3dd;padding-top:18px;}
+.review-tools>summary{cursor:pointer;font-weight:600;padding:8px 0;}
+.review-tools-body{margin-top:16px;}
