@@ -7,3 +7,10 @@ export function filterClassSessions(rows:ClassSession[],search:string,from:strin
 
 export function classEndsAt(value:ClassSession){const start=value.createdAt?.toDate().getTime();return start!==undefined&&Number.isFinite(start)?new Date(start+120*60000):null;}
 export function classFinished(value:ClassSession,now=Date.now()){const end=classEndsAt(value);return !!end&&now>=end.getTime();}
+
+export function attendanceCourseKey(title:string){return title.trim().replace(/\s+/g,' ').toLocaleLowerCase('en');}
+export function attendanceCourses(rows:ClassSession[]){const courses=new Map<string,string>();for(const row of rows){const key=attendanceCourseKey(row.title);if(key&&!courses.has(key))courses.set(key,row.title.trim().replace(/\s+/g,' '));}return [...courses].sort((a,b)=>a[1].localeCompare(b[1]));}
+export type AttendanceHistoryFilters={course:string;session:string;from:string;to:string;report:string;search:string};
+export function attendanceHistory(rows:ClassSession[],filters:AttendanceHistoryFilters,now=Date.now()){
+ return filterClassSessions(rows,filters.search,filters.from,filters.to).filter(row=>(!filters.course||attendanceCourseKey(row.title)===filters.course)&&(!filters.session||row.session===filters.session)&&(!filters.report||(filters.report==='finished'?classFinished(row,now):filters.report==='generated'?!!row.reportGeneratedAt:filters.report==='sent'?row.sharedWithHod===true:filters.report==='private'?row.sharedWithHod!==true:false))).sort((a,b)=>(b.createdAt?.toDate().getTime()||0)-(a.createdAt?.toDate().getTime()||0)||a.id.localeCompare(b.id));
+}
