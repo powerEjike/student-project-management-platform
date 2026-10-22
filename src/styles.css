@@ -74,3 +74,4 @@ button.stat-card{text-align:left;cursor:pointer}button.stat-card:hover,button.st
 .student-stage-list>summary,.student-feedback-conversation>details>summary{cursor:pointer;padding:12px 0;font-weight:600;}
 .student-feedback-conversation{margin-top:24px;border-top:1px solid #dce3dd;padding-top:20px;}
 .student-feedback-conversation h2{font-size:18px;}
+.classroom-code{text-align:center;margin:20px auto;max-width:600px;}.classroom-code img{background:white;max-width:100%;height:auto;}.attendance-code{display:block;overflow-wrap:anywhere;padding:14px;background:#f3f6f0;user-select:all;}.student-class-confirm{margin-top:20px;border-top:1px solid #dce3dd;padding-top:18px;}
