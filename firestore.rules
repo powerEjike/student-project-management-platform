@@ -506,6 +506,18 @@ service cloud.firestore {
     return r.diff(resource.data).affectedKeys().hasOnly(['email','lastEmailEventId','emailUpdatedBy','emailUpdatedAt']) && emailValue(r.email) && r.email != resource.data.email
      && r.lastEmailEventId is string && r.lastEmailEventId.matches('[a-zA-Z0-9_-]{1,128}') && !exists(event) && r.emailUpdatedBy == request.auth.uid && r.emailUpdatedAt == request.time
      && h.email == r.email && h.previousEmail == resource.data.email && h.actorId == request.auth.uid && h.createdAt == request.time; }
+   function rosterCorrectionUpdate(r) { let event=/databases/$(database)/documents/students/$(id)/rosterCorrections/$(r.lastRosterCorrectionId); let h=getAfter(event).data;
+    return r.diff(resource.data).affectedKeys().hasOnly(['name','currentCGPA','admissionSession','lastRosterCorrectionId','rosterCorrectedBy','rosterCorrectedAt'])
+     && r.diff(resource.data).affectedKeys().hasAny(['name','currentCGPA','admissionSession'])
+     && r.name is string && r.name.trim().size() > 0 && r.name == r.name.trim() && r.name.size() <= 120
+     && (!r.keys().hasAny(['currentCGPA']) || (r.currentCGPA is number && r.currentCGPA >= 0 && r.currentCGPA <= 5))
+     && (!r.keys().hasAny(['admissionSession']) || (r.admissionSession is string && r.admissionSession.matches('[0-9]{4}/[0-9]{4}') && int(r.admissionSession.split('/')[1]) == int(r.admissionSession.split('/')[0])+1 && r.admissionSession <= r.session))
+     && r.lastRosterCorrectionId is string && r.lastRosterCorrectionId.matches('[a-zA-Z0-9_-]{1,128}') && !exists(event)
+     && r.rosterCorrectedBy == request.auth.uid && r.rosterCorrectedAt == request.time
+     && h.name == r.name && h.currentCGPA == r.get('currentCGPA',null) && h.admissionSession == r.get('admissionSession','')
+     && h.previousName == resource.data.name && h.previousCGPA == resource.data.get('currentCGPA',null) && h.previousAdmissionSession == resource.data.get('admissionSession','')
+     && h.actorId == request.auth.uid && h.createdAt == request.time;
+   }
    allow get: if (active() && role() == 'admin') || (active() && role() == 'lecturer' && !exists(studentPath(id))) || (active() && role() == 'hod' && (!exists(studentPath(id)) || hod(resource.data.departmentId))) || (exists(projectPath(id)) && access(get(projectPath(id)).data));
    allow list: if (active() && role() == 'admin') || hod(resource.data.departmentId);
    allow create: if ((active() && role() == 'admin') || hod(request.resource.data.departmentId) || lecturerNew(id)) && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId))
@@ -519,8 +531,20 @@ service cloud.firestore {
     && request.resource.data.session.upper().replace('[^A-Z0-9]','').matches('[A-Z0-9]{1,80}')
     && id == request.resource.data.departmentId + '__' + request.resource.data.session.upper().replace('[^A-Z0-9]','') + '__' + request.resource.data.matricKey
     && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
-   allow update: if active() && role() == 'admin' && emailUpdate(request.resource.data);
+   allow update: if active() && role() == 'admin' && (request.resource.data.diff(resource.data).affectedKeys().hasAny(['name','currentCGPA','admissionSession','lastRosterCorrectionId','rosterCorrectedBy','rosterCorrectedAt']) ? rosterCorrectionUpdate(request.resource.data) : emailUpdate(request.resource.data));
    allow delete: if false;
+   match /rosterCorrections/{eid} {
+    allow read: if active() && role() == 'admin';
+    allow create: if active() && role() == 'admin'
+     && getAfter(studentPath(id)).data.lastRosterCorrectionId == eid && getAfter(studentPath(id)).data.rosterCorrectedAt == request.time
+     && getAfter(studentPath(id)).data.diff(get(studentPath(id)).data).affectedKeys().hasAny(['name','currentCGPA','admissionSession'])
+     && request.resource.data.keys().hasOnly(['name','currentCGPA','admissionSession','reason','previousName','previousCGPA','previousAdmissionSession','confirmed','actorId','actorName','createdAt'])
+     && request.resource.data.name == getAfter(studentPath(id)).data.name && request.resource.data.currentCGPA == getAfter(studentPath(id)).data.get('currentCGPA',null) && request.resource.data.admissionSession == getAfter(studentPath(id)).data.get('admissionSession','')
+     && request.resource.data.previousName == get(studentPath(id)).data.name && request.resource.data.previousCGPA == get(studentPath(id)).data.get('currentCGPA',null) && request.resource.data.previousAdmissionSession == get(studentPath(id)).data.get('admissionSession','')
+     && request.resource.data.reason is string && request.resource.data.reason.trim().size() > 0 && request.resource.data.reason.size() <= 500 && request.resource.data.confirmed == true
+     && request.resource.data.actorId == request.auth.uid && request.resource.data.actorName == get(self()).data.displayName && request.resource.data.createdAt == request.time;
+    allow update,delete: if false;
+   }
    match /emailHistory/{eid} {
     allow read: if active() && role() == 'admin';
     allow create: if active() && role() == 'admin' && getAfter(studentPath(id)).data.lastEmailEventId == eid && getAfter(studentPath(id)).data.emailUpdatedAt == request.time
