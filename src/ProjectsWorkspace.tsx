@@ -1,3 +1,4 @@
+import{projectWorkspaceStudents}from'./projectCohort';
 import RosterImportHistory from'./RosterImportHistory';
 import AcademicSessionSettings from'./AcademicSessionSettings';
 import AdminRosterBrowser from'./AdminRosterBrowser';
@@ -54,7 +55,7 @@ export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProj
   /></>;
   const currentProject=projects.find(p=>p.id===openProject);const currentStudent=students.find(s=>s.id===currentProject?.studentId);
   if(currentProject&&currentStudent)return <SimpleProjectFolder key={currentProject.id} project={currentProject} student={currentStudent} profile={profile} uid={uid} onBack={()=>setOpenProject(null)}/>;
-  return <>{feedback}<SimpleStudentDashboard students={students} projects={projects} lecturers={lecturers} profile={profile} uid={uid} loaded={loaded} onOpen={setOpenProject}/></>;
+  return <>{feedback}<SimpleStudentDashboard students={projectWorkspaceStudents(students,projects)} projects={projects} lecturers={lecturers} profile={profile} uid={uid} loaded={loaded} onOpen={setOpenProject}/></>;
 }
 
 function ShieldLabel(){return <span className="badge">SEPARATE WORKSPACE</span>;}

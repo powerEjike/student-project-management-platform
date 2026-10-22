@@ -1,9 +1,11 @@
+import{lowerUndergraduateLevel}from'./projectCohort.ts';
 import type{Student,Project,Lecturer}from'./models.ts';
 export function balancedAllocation(ids:string[],students:Student[],projects:Project[],lecturers:Lecturer[],participants:string[],departmentId:string,capacities:Record<string,string>={}){
  const issues:string[]=[];const selected=[...new Set(ids)],pool=[...new Set(participants)].sort().map(id=>lecturers.find(l=>l.id===id));
  if(!selected.length||selected.length>1000)issues.push('Select between 1 and 1000 unassigned students.');
  if(!pool.length||pool.some(l=>!l))issues.push('Choose available lecturers for the proposal.');
  const chosen=selected.map(id=>students.find(s=>s.id===id));
+ if(chosen.some(s=>s&&lowerUndergraduateLevel(s.level)))issues.push('Project allocation is for final-year students.');
  if(chosen.some(s=>!s||s.departmentId!==departmentId))issues.push('A selected student is unavailable in this department.');
  if(projects.some(p=>selected.includes(p.studentId)))issues.push('Only students without a project folder can use this planner. Use the regular allocation form for changes.');
  const active=projects.filter(p=>p.departmentId===departmentId&&!p.completedDate&&p.releaseState!=='Withheld');
