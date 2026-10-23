@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<rect width="1200" height="630" fill="#133d33"/><circle cx="1130" cy="90" r="290" fill="#214d3f"/><circle cx="1165" cy="90" r="215" fill="none" stroke="#386351" stroke-width="2"/>
+<path d="M80 115 116 97l36 18-36 18zM94 124v23q22 16 44 0v-23M152 115v34" fill="none" stroke="#d5edb8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<g font-family="Arial, sans-serif"><text x="174" y="140" fill="white" font-size="48" font-weight="700">ProjectTrack</text>
+<text x="80" y="288" fill="white" font-size="70" font-weight="700">Student projects.</text><text x="80" y="371" fill="#d5edb8" font-size="70" font-weight="700">Clear progress.</text>
+<text x="84" y="439" fill="#d4e1da" font-size="27">Supervision · Class attendance · Department coordination</text>
+<path d="M80 501H1120" stroke="#386351" stroke-width="2"/>
+<text x="84" y="556" fill="#d5edb8" font-size="25" font-weight="700" letter-spacing="3">BIOCHEMISTRY</text><text x="1118" y="556" text-anchor="end" fill="#d4e1da" font-size="22">projecttrack-biochemistry.web.app</text></g></svg>
