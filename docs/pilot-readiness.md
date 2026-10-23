@@ -1,33 +1,31 @@
-# Pilot readiness — 19 October 2026
+# Pilot readiness — 23 October 2026
 
-The core staff workflows are implemented. Automated checks are evidence for their tested paths; they do not replace an authenticated staff walkthrough or institution approval for live use.
+The agreed current pilot features are implemented. The release is ready for user acceptance; automated checks and synthetic previews do not establish institutional acceptance or a completed live role-by-role walkthrough.
 
-## Implemented workflow chain
-
-| Workflow | Implemented behavior | Important boundary |
+| Area | Delivered | Boundary |
 | --- | --- | --- |
-| Super Admin setup | Departments, staff access, reviewed CSV/Excel batch preparation and student roster import | Browser staff batch preparation does not itself create login accounts; trusted operator provisioning is separate. |
-| HOD allocation | Individual and reviewed balanced first allocation, workloads, co-supervision, audited reassignment | Balanced proposals use primary workload, not inferred expertise. Partial batch results must be reviewed. |
-| Topic approval | Archive exact-repeat check, conservative similar-title suggestions, supervisor decision, department milestone template | Similarity is not a plagiarism finding; a missing match is not proof of originality. |
-| Supervision | Milestone progress/deadlines, meetings and contact evidence, ethics and structured feedback | Contact attempts and successful exchanges remain distinct. Missing activity is unknown, not proof of non-response. |
-| Draft review | Local PDF/Word review, annotations, version metadata receipts, revision comparison, annotated and examiner PDF exports | Original files are not stored in shared cloud storage. Metadata receipts are not file backups. |
-| Department oversight | Progress/submission/feedback views, workload and session summaries, release decisions and audit history | A generated current snapshot is not a historical session-end reconstruction. |
-| Defence and archive | Supervisor completion enters the eligible student in the HOD defence list; withdrawal removes them; post-defence completion records the date and consent-confirmed archive metadata atomically | Readiness and final completion are separate. Scheduling, panels and scoring are outside this version. |
-| Staff communication | Department/direct/group chat, threads, project links, private unread/mute state, optional direct-chat open positions, routed reporting and audited moderation | Sharing defaults off. An opened position is not proof a message was read. Reports do not grant general private-chat access. |
-| Student email preparation | Reviewed reminder and annotated-feedback email drafts for manual sending | Download does not send email or prove delivery; no automatic provider or scheduler is connected. |
+| Super Admin | Department/staff controls, CSV/Excel roster import and reviewed corrections, student approval | Staff login provisioning uses trusted operator tooling; roster import does not create accounts. |
+| HOD | Reviewed single/bulk allocation, workload, progress and defence oversight | Concurrent capacity is not reserved globally; successful partial allocations remain saved. |
+| Lecturer | Compact assigned-student dashboard, explicit folder creation, archive topic check/revision, milestones and feedback | Similar topic suggestions need academic judgment; no-match is not proof of originality. |
+| Student | Self-registration, approval, verification, published progress, feedback replies and focused dashboard | Only sanitized published updates and the student’s own records are visible. |
+| Documents | Local PDF/Word review, saved comments, version receipts, revision comparison and annotated PDF export | Original files are not uploaded or shared across devices. Word conversion has layout/feature limits. |
+| Attendance | All undergraduate levels, two-hour classes, timed rotating QR check-in, immutable receipts, histories, Excel reports and optional HOD sharing/notification | One approved roster identity per class; shared accounts/codes still require physical staff checks. HOD sees only own classes or explicitly sent reports. |
+| Staff chat | Floating department/direct/group conversations, replies, unread/mute states and moderation | No attachments or automatic email/push delivery. |
+| Defence/archive | Completion enters the HOD defence list; withdrawal and final archive retain history | Scheduling, panels and scoring are outside this version. |
 
-## Automated verification
+## Release evidence
 
-The GitHub validation workflow builds the app, runs application tests and Firestore permission tests, then rehearses encrypted backup recovery against a disposable demo emulator. The synthetic pilot lifecycle test connects roster creation, allocation, topic approval, milestone updates, defence clearance, withdrawal, renewed clearance and final archive creation. It checks the HOD queue and retained audit records throughout.
+- Application build and tests, full Firestore permission tests and backup/restore emulator rehearsal run in CI.
+- The connected synthetic pilot covers roster, account approval, attendance/check-in/history, two-hour report generation, HOD sharing/notice receipt, allocation, folder/topic/progress, student feedback reply and defence/archive.
+- Synthetic browser previews cover dashboard navigation, mobile layout, preserved drafts and the changed controls. No production students or attendance records are used for these previews.
+- Public deployment verification checks both sites’ index and referenced local build assets. It is not an authenticated live walkthrough.
 
-These tests use synthetic emulator records. They do not modify production student records, sign in as real staff, send email or constitute an actual production backup.
+## Explicitly deferred
 
-## Remaining before a real departmental pilot
+Billing remains disabled. Shared original-file storage, chat attachments, automatic email/background schedules, optional two-factor enrollment and scheduled production backup are not delivered. Manual email drafts, local originals and trusted backup tooling do not substitute for those services.
 
-- Walk through the deployed UI with the institution's designated Super Admin, HOD and lecturer accounts: roster review, allocation, topic approval, draft review, defence withdrawal/re-clearance and final completion. Use clearly identified pilot fixtures and an agreed cleanup process. This has not yet been completed end to end.
-- Confirm the temporary staff email addresses and each person's actual department assignment before handing over accounts. Staff set their own passwords through the approved reset process.
-- Agree how original drafts are retained and handed between supervisors while cloud storage is disabled. Reassignment transfers application history, not local files between computers.
-- Arrange a real private operator backup and a recovery exercise covering the required operational scope. Existing Firestore tooling does not back up Auth users, original files, hosting configuration or rules. There is no scheduled daily production backup.
-- Decide separately whether to enable cloud originals/attachments, an email provider and background scheduling, or optional two-factor enrollment. They remain unimplemented or unconnected; billing stays disabled unless the owner explicitly changes that decision.
+## Operational acceptance
 
-Continue fixing verified gaps in existing workflows. Do not describe guidance pages, additional exports or passing tests as completion of the remaining infrastructure and operational work.
+Before general departmental use, designated staff should accept the deployed workflows, confirm staff ownership/temporary email replacements, decide original-file handover/retention and arrange a private production backup with an appropriate recovery exercise. These operational decisions are distinct from completing the pilot feature build. The owner has asked to leave the live browser walkthrough aside; it is not claimed as completed.
+
+Do not create or approve real student accounts, redistribute real allocations or create attendance fixtures merely to make a release check pass.

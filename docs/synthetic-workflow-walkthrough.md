@@ -23,3 +23,10 @@ Scope: authenticated role contexts exercise the real Firestore rules. Firebase A
 Reproduce with `npm run test:rules`; the connected journey runs as part of the permission suite. CI also runs app, build and backup/restore checks.
 
 Validation result: connected journey passed; all 235 app tests and all 62 Firestore permission tests passed locally. No product code or Firestore rules changed during this walkthrough.
+
+
+## Final connected regression — 23 October 2026
+
+The same approved synthetic roster identity now also completes attendance before any project allocation: lecturer starts class and writes QR keys atomically; unverified access is denied; the verified student checks in once and sees their collection-group history. HOD access and early report generation are denied. The test closes check-in and advances only the synthetic fixture’s start time past two hours, then generates/shares the report, derives the HOD notice, saves a private seen receipt and denies another staff member access to it. The original allocation-to-archive journey then completes unchanged.
+
+The expanded connected case passed locally. This fixture time adjustment is not a production operation or a claim that two hours elapsed during the test. The full release CI remains the source of the final complete-suite result.

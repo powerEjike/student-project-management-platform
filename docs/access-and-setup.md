@@ -1,3 +1,5 @@
+> Historical implementation log: early sections describe earlier delivery stages. For current behavior and release boundaries, use [release handover](release-handover.md), [pilot readiness](pilot-readiness.md) and [product direction](product-direction.md). Student self-registration and administrator approval are now implemented; browser staff self-registration remains unavailable.
+
 # Staff sign-in and access
 
 The first task implements email/password sign-in, password reset, session-only persistence, sign-out, a live approved-staff check, a responsive staff workspace and deny-by-default database rules. There is no public sign-up or role selector. Analytics is not initialized.
