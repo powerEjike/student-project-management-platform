@@ -1,0 +1,2 @@
+export function linkedDepartment(search:string){const id=new URLSearchParams(search).get('department')||'';return /^[a-z0-9-]{1,100}$/.test(id)?id:'';}
+export function departmentStudentLink(origin:string,id:string){if(!/^[a-z0-9-]{1,100}$/.test(id))throw Error('Invalid department link.');const url=new URL('/',origin);url.searchParams.set('department',id);url.searchParams.set('portal','student');return url.href;}

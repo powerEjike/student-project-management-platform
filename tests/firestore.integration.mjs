@@ -816,3 +816,25 @@ test('student attendance history lists only the currently approved roster identi
  await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'studentAccountRequests','history-rebound'),{status:'Approved',studentId:id,email});await updateDoc(doc(db,'studentPortalAccess',email),{requestUid:'history-rebound'});});const rebound=env.authenticatedContext('history-rebound',{email,email_verified:true}).firestore();assert.equal((await assertSucceeds(history(rebound))).size,1);await assertFails(history(student));await assertSucceeds(getDoc(doc(rebound,'classSessions',sid)));await assertFails(updateDoc(doc(rebound,'classSessions',sid,'checkIns',id),{checkedAt:serverTimestamp()}));
  await env.withSecurityRulesDisabled(async c=>await updateDoc(doc(c.firestore(),'studentPortalAccess',email),{active:false}));await assertFails(history(rebound));await assertFails(getDoc(doc(rebound,'classSessions',sid)));await assertFails(getDoc(doc(rebound,'classSessions',sid,'checkIns',id)));
 });
+
+test('multi-department setup keeps customization admin-only and allows HOD roster intake only in their own department',async()=>{
+ const admin=env.authenticatedContext('admin').firestore(),hod=env.authenticatedContext('hod-a').firestore(),foreign=env.authenticatedContext('hod-b').firestore();
+ const custom={programme:'BSc Chemistry',accent:'#245588',welcome:'Welcome to Chemistry'};
+ await assertSucceeds(updateDoc(doc(admin,'departments','dept-b'),custom));
+ await assertSucceeds(getDoc(doc(foreign,'departments','dept-b')));
+ await assertFails(getDoc(doc(hod,'departments','dept-b')));
+ for(const uid of ['hod-a','hod-b','sup','inactive','unknown'])await assertFails(updateDoc(doc(env.authenticatedContext(uid).firestore(),'departments','dept-b'),{...custom,welcome:'Not allowed'}));
+ for(const invalid of [{accent:'red'},{programme:''},{welcome:'a'.repeat(161)},{createdBy:'someone'}])await assertFails(updateDoc(doc(admin,'departments','dept-b'),{...custom,...invalid}));
+ const student={departmentId:'dept-a',name:'Synthetic Department Student',matricNumber:'MULTI/001',matricKey:'MULTI001',programme:'BSc Department A',level:'Final year',session:'2025/2026',admissionSession:'2022/2023',email:'',currentCGPA:4.2,createdBy:'hod-a',createdAt:serverTimestamp()};
+ const receipt={departmentId:'dept-a',session:'2025/2026',admissionSession:'2022/2023',added:1,skipped:0,actorId:'hod-a',createdAt:serverTimestamp(),runId:'hod-intake',sourceName:'Synthetic.csv',sourceRows:1,batchNumber:1,batchCount:1,programme:student.programme,level:'Final year'};
+ const batch=writeBatch(hod);batch.set(doc(hod,'students','dept-a__20252026__MULTI001'),student);batch.set(doc(hod,'rosterImports','hod-intake_1'),receipt);await assertSucceeds(batch.commit());
+ await assertSucceeds(getDoc(doc(admin,'students','dept-a__20252026__MULTI001')));
+ await assertSucceeds(getDocs(query(collection(hod,'students'),where('departmentId','==','dept-a'))));
+ await assertFails(getDoc(doc(foreign,'students','dept-a__20252026__MULTI001')));
+ for(const uid of ['hod-b','sup','inactive','unknown']){
+  const db=env.authenticatedContext(uid).firestore();await assertFails(setDoc(doc(db,'rosterImports',`blocked-${uid}_1`),{...receipt,runId:`blocked-${uid}`,actorId:uid}));
+  await assertFails(setDoc(doc(db,'students',`dept-a__20252026__BLOCKED${uid.replace(/[^A-Z0-9]/gi,'').toUpperCase()}`),{...student,matricNumber:`BLOCKED${uid.replace(/[^A-Z0-9]/gi,'').toUpperCase()}`,matricKey:`BLOCKED${uid.replace(/[^A-Z0-9]/gi,'').toUpperCase()}`,createdBy:uid}));
+ }
+ await assertFails(updateDoc(doc(hod,'rosterImports','hod-intake_1'),{added:0}));
+ await assertFails(updateDoc(doc(hod,'students','dept-a__20252026__MULTI001'),{departmentId:'dept-b'}));
+});

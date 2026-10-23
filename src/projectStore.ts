@@ -7,7 +7,7 @@ import type {StaffProfile,Student,Project,Lecturer} from './models';
 const db=getFirestore(app!);
 export const canonical=(value:string)=>value.toUpperCase().replace(/[^A-Z0-9]/g,'');
 export const studentIdFor=(departmentId:string,session:string,matric:string)=>`${departmentId}__${canonical(session)}__${canonical(matric)}`;
-export function watchDepartments(receive:(data:{id:string;name:string}[])=>void,fail:()=>void){return onSnapshot(collection(db,'departments'),s=>receive(s.docs.map(d=>({id:d.id,name:d.data().name}))),fail);}
+export function watchDepartments(receive:(data:{id:string;name:string}[])=>void,fail:()=>void){return onSnapshot(collection(db,'departments'),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as {id:string;name:string;programme?:string;accent?:string;welcome?:string}))),fail);}
 export function watchStaffDirectory(receive:(data:(StaffProfile&{id:string})[])=>void,fail:()=>void){return onSnapshot(collection(db,'staff'),s=>receive(s.docs.map(d=>({id:d.id,...d.data()} as StaffProfile&{id:string}))),fail);}
 export async function updateStaffAssignment(id:string,role:StaffProfile['role'],active:boolean,department:{id:string;name:string}|undefined){
   if(role!=='admin'&&!department)throw new Error('Select a department for this staff account.');
@@ -41,8 +41,8 @@ export async function registerSupervisorProject(input:{title:string;name:string;
  if(profile.role!=='lecturer'||!profile.departmentId)throw Error('An active departmental supervisor is required.');
  if(!input.name.trim()||!canonical(input.matricNumber)||!canonical(input.session))throw Error('Enter the student name, registration number and academic session.');
  const id=studentIdFor(profile.departmentId,input.session,input.matricNumber);const studentRef=doc(db,'students',id);const projectRef=doc(db,'projects',id);const eventRef=doc(collection(projectRef,'allocations'));
- await runTransaction(db,async tx=>{if((await tx.get(studentRef)).exists())throw Error('This registration number already exists for that session. Ask the HOD to check its allocation.');
- tx.set(studentRef,{departmentId:profile.departmentId,name:input.name.trim(),matricNumber:input.matricNumber.trim(),matricKey:canonical(input.matricNumber),programme:'BSc Biochemistry',level:'Final year',session:input.session.trim(),email:'',createdBy:uid,createdAt:serverTimestamp()});
+ await runTransaction(db,async tx=>{const department=await tx.get(doc(db,'departments',profile.departmentId!));const programme=department.data()?.programme||('BSc '+String(department.data()?.name||'').replace(/^Department of /i,''));if(!department.exists())throw Error('Department not found. Ask your administrator to check setup.');if((await tx.get(studentRef)).exists())throw Error('This registration number already exists for that session. Ask the HOD to check its allocation.');
+ tx.set(studentRef,{departmentId:profile.departmentId,name:input.name.trim(),matricNumber:input.matricNumber.trim(),matricKey:canonical(input.matricNumber),programme,level:'Final year',session:input.session.trim(),email:'',createdBy:uid,createdAt:serverTimestamp()});
  tx.set(projectRef,{departmentId:profile.departmentId,studentId:id,supervisorId:uid,coSupervisorId:'',supervisorName:profile.displayName,coSupervisorName:'',title:input.title.trim(),status:'Awaiting topic',createdBy:uid,createdAt:serverTimestamp(),updatedBy:uid,updatedAt:serverTimestamp(),lastAllocationEventId:eventRef.id});
  tx.set(eventRef,{departmentId:profile.departmentId,studentId:id,supervisorId:uid,coSupervisorId:'',previousSupervisorId:'',previousCoSupervisorId:'',reason:'Supervisor registered student after an archive title check',actorId:uid,createdAt:serverTimestamp()});});
 }

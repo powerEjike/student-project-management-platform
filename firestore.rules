@@ -334,8 +334,11 @@ service cloud.firestore {
   }
   match /departments/{id} {
    allow read: if active() && (role() == 'admin' || same(id));
-   allow create: if active() && role() == 'admin' && id.matches('[a-z0-9-]{1,100}') && request.resource.data.keys().hasOnly(['name','createdBy','createdAt']) && text(request.resource.data.name,120) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
    allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) && text(request.resource.data.name,120);
+   allow create: if active() && role() == 'admin' && id.matches('[a-z0-9-]{1,100}') && request.resource.data.keys().hasOnly(['name','createdBy','createdAt']) && text(request.resource.data.name,120) && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time;
+   allow update: if active() && role() == 'admin' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['programme','accent','welcome'])
+    && text(request.resource.data.programme,80) && request.resource.data.accent is string && request.resource.data.accent.matches('#[0-9a-fA-F]{6}')
+    && request.resource.data.welcome is string && request.resource.data.welcome.size() <= 160;
    allow delete: if false;
   }
   function ethicsStage(stages,i) { return stages.size() <= i || (stages[i] is string && stages[i].trim().size() > 0 && stages[i].size() <= 100 && stages[i] == stages[i].trim().lower()); }
@@ -501,7 +504,7 @@ service cloud.firestore {
     && r.batchNumber is int && r.batchNumber >= 1 && r.batchNumber <= r.batchCount
     && r.added+r.skipped == (r.batchNumber < r.batchCount ? 10 : r.sourceRows-(r.batchCount-1)*10); }
    allow read: if active() && (role() == 'admin' || hod(resource.data.departmentId));
-   allow create: if active() && role() == 'admin' && request.resource.data.keys().hasOnly(['departmentId','session','admissionSession','added','skipped','actorId','createdAt','runId','sourceName','sourceRows','batchNumber','batchCount','programme','level'])
+   allow create: if active() && (role() == 'admin' || hod(request.resource.data.departmentId)) && request.resource.data.keys().hasOnly(['departmentId','session','admissionSession','added','skipped','actorId','createdAt','runId','sourceName','sourceRows','batchNumber','batchCount','programme','level'])
     && exists(/databases/$(database)/documents/departments/$(request.resource.data.departmentId)) && text(request.resource.data.session,80) && text(request.resource.data.admissionSession,80)
     && request.resource.data.added is int && request.resource.data.added >= 0 && request.resource.data.added <= 10 && request.resource.data.skipped is int && request.resource.data.skipped >= 0 && request.resource.data.skipped <= 10
     && (request.resource.data.keys().hasAny(['runId','sourceName','sourceRows','batchNumber','batchCount','programme','level']) ? grouped(request.resource.data) : request.resource.data.added > 0 && request.resource.data.added+request.resource.data.skipped <= 10)

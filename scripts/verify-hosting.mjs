@@ -1,6 +1,6 @@
 import{readFile,readdir}from'node:fs/promises';
 import{createHash}from'node:crypto';
-const dist=new URL('../dist/',import.meta.url),hosts=['projecttrack-biochemistry.web.app','student-project-manageme-7efae.web.app'];
+const dist=new URL('../dist/',import.meta.url),hosts=['projecttrack-departments.web.app','projecttrack-biochemistry.web.app','student-project-manageme-7efae.web.app'];
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const index=await readFile(new URL('index.html',dist)),html=index.toString('utf8'),assets=new Set([...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)].map(match=>match[1]).filter(path=>/^\/assets\/[^/]+\.(js|css)$/.test(path)));
 if(!assets.size)throw Error('Build entry assets were not found. Run npm run build first.');

@@ -1,11 +1,11 @@
 # ProjectTrack
 
-A Biochemistry student project and class attendance platform. The current build is deployed at [ProjectTrack](https://projecttrack-biochemistry.web.app/).
+A student project and class attendance platform for multiple departments. The current build is deployed at [ProjectTrack](https://projecttrack-departments.web.app/). See [department setup](docs/departments.md).
 
 ## Delivered workflows
 
 - Super Admin imports student rosters, manages staff access and approves roster-matched student accounts.
-- HOD allocates final-year students to lecturers, reviews workloads and follows project progress and defence readiness.
+- HOD uploads their own department roster, shares its registration link, allocates final-year students to lecturers, reviews workloads and follows project progress and defence readiness.
 - Lecturers create assigned students’ folders, check topics against the archive, review local PDF/Word documents, update milestones and publish student-facing feedback.
 - Approved, verified students view published progress, reply to feedback and check into classes across 100–400 level.
 - Lecturers run two-hour classes with short rotating QR check-in windows, generate attendance Excel reports afterwards, and optionally send them to the HOD.

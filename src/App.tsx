@@ -1,3 +1,4 @@
+import {linkedDepartment} from './departmentLink';
 import FloatingStaffChat from './FloatingStaffChat';
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { onAuthStateChanged, sendPasswordResetEmail, signInWithEmailAndPassword, signOut, type User } from 'firebase/auth';
@@ -27,7 +28,7 @@ function errorMessage(error: unknown) {
 }
 function Brand() {return <a className="brand" href="/" aria-label="ProjectTrack home"><span className="brand-mark"><GraduationCap size={25}/></span><span>Project<span className="brand-light">Track</span></span></a>;}
 export default function App() {
-  const [studentEntry,setStudentEntry]=useState(()=>location.hash.startsWith('#attendance='));
+  const [studentEntry,setStudentEntry]=useState(()=>location.hash.startsWith('#attendance=')||!!linkedDepartment(location.search));
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(!!auth);

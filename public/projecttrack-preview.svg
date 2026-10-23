@@ -5,4 +5,4 @@
 <text x="80" y="288" fill="white" font-size="70" font-weight="700">Student projects.</text><text x="80" y="371" fill="#d5edb8" font-size="70" font-weight="700">Clear progress.</text>
 <text x="84" y="439" fill="#d4e1da" font-size="27">Supervision · Class attendance · Department coordination</text>
 <path d="M80 501H1120" stroke="#386351" stroke-width="2"/>
-<text x="84" y="556" fill="#d5edb8" font-size="25" font-weight="700" letter-spacing="3">BIOCHEMISTRY</text><text x="1118" y="556" text-anchor="end" fill="#d4e1da" font-size="22">projecttrack-biochemistry.web.app</text></g></svg>
+<text x="84" y="556" fill="#d5edb8" font-size="25" font-weight="700" letter-spacing="3">FOR EVERY DEPARTMENT</text><text x="1118" y="556" text-anchor="end" fill="#d4e1da" font-size="22">projecttrack-departments.web.app</text></g></svg>
