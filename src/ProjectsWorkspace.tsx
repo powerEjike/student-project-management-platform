@@ -24,9 +24,9 @@ import {BookOpen,Plus} from 'lucide-react';
 import {createDepartment,readStudent,updateStaffAssignment,watchDepartments,watchLecturers,watchProjects,watchStaffDirectory,watchStudents} from './projectStore';
 import type {StaffProfile,Student,Project,Lecturer} from './models';
 import TemplateManager from './TemplateManager';
-type Props={profile:StaffProfile;uid:string;requestedProjectId?:string|null;onProjectRequestHandled?:()=>void};
+type Props={profile:StaffProfile;uid:string;requestedProjectId?:string|null;onProjectRequestHandled?:()=>void;onOpenAttendance?:()=>void};
 function readableError(error:unknown){const e=error as {code?:string;message?:string};return e.code==='permission-denied'?'Your account does not have permission for this action.':e.code?'Could not save this change. Check your connection and try again.':e.message||'Could not save this change.';}
-export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProjectRequestHandled}:Props){
+export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProjectRequestHandled,onOpenAttendance}:Props){
  const [students,setStudents]=useState<Student[]>([]),[projects,setProjects]=useState<Project[]>([]),[lecturers,setLecturers]=useState<Lecturer[]>([]),[departments,setDepartments]=useState<{id:string;name:string}[]>([]);
  const[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[departmentName,setDepartmentName]=useState(''),[openProject,setOpenProject]=useState<string|null>(null);
   const[staffDepartmentFilter,setStaffDepartmentFilter]=useState('');
@@ -55,7 +55,7 @@ export default function ProjectsWorkspace({profile,uid,requestedProjectId,onProj
   /></>;
   const currentProject=projects.find(p=>p.id===openProject);const currentStudent=students.find(s=>s.id===currentProject?.studentId);
   if(currentProject&&currentStudent)return <SimpleProjectFolder key={currentProject.id} project={currentProject} student={currentStudent} profile={profile} uid={uid} onBack={()=>setOpenProject(null)}/>;
-  return <>{feedback}<SimpleStudentDashboard students={projectWorkspaceStudents(students,projects)} projects={projects} lecturers={lecturers} profile={profile} uid={uid} loaded={loaded} onOpen={setOpenProject}/></>;
+  return <>{feedback}<SimpleStudentDashboard students={projectWorkspaceStudents(students,projects)} projects={projects} lecturers={lecturers} profile={profile} uid={uid} loaded={loaded} onOpen={setOpenProject} onAttendance={onOpenAttendance}/></>;
 }
 
 function ShieldLabel(){return <span className="badge">SEPARATE WORKSPACE</span>;}
