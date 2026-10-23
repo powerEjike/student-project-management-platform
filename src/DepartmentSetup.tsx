@@ -5,8 +5,8 @@ import {departmentStudentLink} from './departmentLink';
 export type Department={id:string;name:string;programme?:string;accent?:string;welcome?:string};
 export function DepartmentLink({department}:{department:Department}){
  const[ready,setReady]=useState(false),[session,setSession]=useState(''),[error,setError]=useState(''),[copied,setCopied]=useState(false);
- useEffect(()=>{setReady(false);setSession('');setError('');return onSnapshot(doc(getFirestore(app!),'registrationSessions',department.id),s=>{setSession(s.data()?.session||'');setReady(true);},()=>setError('Could not check registration setup.'));},[department.id]);
- const link=departmentStudentLink(location.origin,department.id);
+ useEffect(()=>{setReady(false);setSession('');setError('');setCopied(false);return onSnapshot(doc(getFirestore(app!),'registrationSessions',department.id),s=>{setSession(s.data()?.session||'');setReady(true);},()=>setError('Could not check registration setup.'));},[department.id]);
+ const link=departmentStudentLink('https://projecttrack-departments.web.app',department.id);
  return <div className="department-share"><label>Student registration link<input readOnly aria-label={`${department.name} student link`} value={link} onFocus={e=>e.target.select()}/></label><button className="secondary" type="button" disabled={!ready||!session} onClick={async()=>{try{await navigator.clipboard.writeText(link);setCopied(true);}catch{setError('Select and copy the link above.');}}}>{copied?'Link copied':'Copy student link'}</button><p className="muted">{!ready?'Checking registration setup…':session?`Registration session: ${session}. Students still need Super Admin approval.`:'Set an active academic session in Super Admin settings before sharing.'}</p>{error&&<p role="alert">{error}</p>}</div>;
 }
 export function DepartmentCard({department}:{department:Department}){
