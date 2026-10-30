@@ -1,6 +1,12 @@
 # ProjectTrack pilot build handover — 23 October 2026
 
-Live site: [ProjectTrack](https://projecttrack-biochemistry.web.app/).
+Live site: [ProjectTrack](https://projecttrack-departments.web.app/). The previous Biochemistry address remains available.
+
+## Closing checkpoint — 30 October 2026
+
+Later approved updates added [separate department setup](departments.md), HOD roster uploads and department registration links, [audited corrections](audit-2026-10-24.md), and [screen recovery and dependency maintenance](improvements-2026-10-24.md). The Super Admin overview now shows five department configuration checks with shortcuts to the relevant department settings. These are guidance, not permission changes or a guarantee of operational readiness.
+
+The build is ready for the acceptance steps below. Continue with role-by-role acceptance and reported defects; further feature additions should have a specific agreed purpose. Staff onboarding still uses trusted operator tooling, and student account approval remains with the Super Admin.
 
 ## Current build scope
 

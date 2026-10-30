@@ -4,6 +4,8 @@ ProjectTrack serves multiple departments at https://projecttrack-departments.web
 
 ## Set up a department
 
+The Super Admin overview includes **Department setup**. Expand a department's configured count to check its HOD, lecturers, saved default programme, current registration session and programme milestone template. **Configure** opens the relevant administration section; session and template shortcuts preselect that department. Five lecturers is a suggested staffing target; one active lecturer satisfies the staffing check. These checks describe configuration only and do not grant access or certify institutional readiness. Failed setting reads stay unverified and offer a retry.
+
 1. In Super Admin → Workspace → Departments & staff, create the department.
 2. Open **Customize department** on its card. Save its default programme, colour and welcome line. These do not change existing student programmes or project records.
 3. Prepare/provision staff through the existing trusted staff onboarding process. Assign an HOD and lecturers to this department in the staff directory. Five lecturers is a suggested starting point, not an access requirement.
