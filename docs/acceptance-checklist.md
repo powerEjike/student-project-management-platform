@@ -9,9 +9,11 @@ Release `867a351` passed its build, all 249 application tests, Firestore permiss
 | Department | Verified configuration | Still needed |
 | --- | --- | --- |
 | Biochemistry | HOD, five lecturers, BSc Biochemistry default, current session 2025/2026 and existing seven-stage template; all five setup checks pass. | Staff/user acceptance below. |
-| Chemistry | Department exists. | HOD, lecturers, programme, current session and milestone template. Owner's demo-versus-real staff choice is pending. |
+| Chemistry | Demo HOD and five demo lecturers created, email-verified and login-checked; two of five setup checks pass. | Default programme, current session and milestone template. |
 
-Biochemistry's previously missing default programme was saved to match its existing BSc Biochemistry template. Appearance defaults were preserved. No student, staff, allocation, project or attendance records changed. Configuration checks are not user acceptance.
+Biochemistry's previously missing default programme was saved to match its existing BSc Biochemistry template. Appearance defaults were preserved. That programme correction did not change student, staff, allocation, project or attendance records. Configuration checks are not user acceptance.
+
+Following explicit owner approval, Chemistry received a clearly labelled temporary demo HOD and five demo lecturers. Each email was verified through Yopmail and its used verification message deleted; Firebase verified flags, login credentials and department-scoped staff roles were checked. Login details remain in a local file outside the repository. No students were assigned and Biochemistry staff were unchanged.
 
 ## Role-by-role acceptance
 
