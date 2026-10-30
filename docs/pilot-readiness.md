@@ -18,7 +18,7 @@ The agreed current pilot features are implemented. The release is ready for user
 - Application build and tests, full Firestore permission tests and backup/restore emulator rehearsal run in CI.
 - The connected synthetic pilot covers roster, account approval, attendance/check-in/history, two-hour report generation, HOD sharing/notice receipt, allocation, folder/topic/progress, student feedback reply and defence/archive.
 - Synthetic browser previews cover dashboard navigation, mobile layout, preserved drafts and the changed controls. No production students or attendance records are used for these previews.
-- Public deployment verification checks both sites’ index and referenced local build assets. It is not an authenticated live walkthrough.
+- Public deployment verification checks all three sites’ indexes and referenced local build assets. It is not an authenticated live walkthrough.
 
 ## Explicitly deferred
 

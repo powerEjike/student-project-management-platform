@@ -6,7 +6,7 @@ Live site: [ProjectTrack](https://projecttrack-departments.web.app/). The previo
 
 Later approved updates added [separate department setup](departments.md), HOD roster uploads and department registration links, [audited corrections](audit-2026-10-24.md), and [screen recovery and dependency maintenance](improvements-2026-10-24.md). The Super Admin overview now shows five department configuration checks with shortcuts to the relevant department settings. These are guidance, not permission changes or a guarantee of operational readiness.
 
-The build is ready for the acceptance steps below. Continue with role-by-role acceptance and reported defects; further feature additions should have a specific agreed purpose. Staff onboarding still uses trusted operator tooling, and student account approval remains with the Super Admin.
+The build is ready for the [role-by-role acceptance checklist](acceptance-checklist.md). Continue with role-by-role acceptance and reported defects; further feature additions should have a specific agreed purpose. Staff onboarding still uses trusted operator tooling, and student account approval remains with the Super Admin.
 
 ## Current build scope
 
@@ -27,7 +27,7 @@ For the pilot cohort, current academic session is 2025/2026; admission session i
 
 `npm run build` and `npm test` check the application. `npm run test:rules` runs real Firestore rules against synthetic emulator data, including the connected roster-to-archive and attendance/report path. `npm run test:backup` rehearses encrypted Firestore recovery against a disposable emulator. CI runs all four.
 
-After hosting deployment, `npm run verify:hosting` compares both public indexes and the entry/core feature assets with the local build. Passing this check confirms deployed assets, not authenticated email/password flows or institutional acceptance.
+After hosting deployment, `npm run verify:hosting` compares all three public indexes and the entry/core feature assets with the local build. Passing this check confirms deployed assets, not authenticated email/password flows or institutional acceptance.
 
 The [synthetic walkthrough](synthetic-workflow-walkthrough.md) and [pilot readiness](pilot-readiness.md) describe evidence and boundaries. The user asked to leave the live browser walkthrough aside; no completed production role-switching walkthrough is claimed.
 
